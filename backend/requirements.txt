@@ -1,0 +1,9 @@
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+sqlalchemy>=2.0.36
+psycopg[binary]>=3.2.3
+pydantic>=2.10.0
+pydantic-settings>=2.6.0
+transformers>=4.46.0
+torch>=2.5.0
+python-multipart>=0.0.12
