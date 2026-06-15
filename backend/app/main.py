@@ -1,5 +1,12 @@
 import logging
+import sys
 from contextlib import asynccontextmanager
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+    stream=sys.stdout,
+)
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,7 +23,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(_: FastAPI):
     settings = get_settings()
     init_db()
-    if settings.preload_models:
+    if settings.preload_models and settings.app_role == "scheduler":
         logger.info("Preloading Hugging Face models into cache")
         get_model_registry().preload()
     yield
@@ -24,7 +31,7 @@ async def lifespan(_: FastAPI):
 
 def create_app() -> FastAPI:
     settings = get_settings()
-    app = FastAPI(title="Momants Conversation Stats", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="Momants Conversation Stats", version="0.2.0", lifespan=lifespan)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,

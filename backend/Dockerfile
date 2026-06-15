@@ -7,9 +7,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --default-timeout=300 \
+    torch==2.5.1 \
+    --index-url https://download.pytorch.org/whl/cpu \
+ && pip install --no-cache-dir --default-timeout=300 -r requirements.txt
 
 COPY app ./app
+COPY templates ./templates
+COPY scripts ./scripts
+COPY crontab ./crontab
+COPY alembic.ini .
+COPY alembic ./alembic
+
+RUN chmod +x /app/scripts/scheduler-loop.sh
 
 ENV HF_HOME=/app/.cache/huggingface
 ENV TRANSFORMERS_CACHE=/app/.cache/huggingface/hub

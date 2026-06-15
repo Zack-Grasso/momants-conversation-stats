@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{event_name}} · Conversation Analysis</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #151515;
+    --text: #2b2b2b;
+    --muted: #888;
+    --accent: #E2F5C9;
+    --accent-border: #cce9a8;
+    --accent-dark: #3a5a1a;
+    --card: #f5f5f3;
+    --card-border: #e8e8e4;
+    --white: #ffffff;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: #d0d4db;
+    color: var(--text);
+    padding: 40px 0;
+  }
+
+  /* ── slide shell: fixed 16:9, no overflow clipping on content ── */
+  .slide {
+    width: 1440px;
+    max-width: 96vw;
+    /* ratio box but allow height to grow on small screens */
+    aspect-ratio: 1440 / 830;
+    min-height: 0;
+    background: #fff;
+    margin: 0 auto 40px;
+    border-radius: 12px;
+    box-shadow: 0 4px 32px rgba(0,0,0,.10);
+    display: flex;
+    flex-direction: column;
+    /* generous side padding, top 40, bottom 0 so footer sits at edge */
+    padding: 40px 80px 0;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* topbar */
+  .topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+    padding-bottom: 0;
+  }
+  .logo { display: flex; align-items: center; color: #151515; }
+  .logo .mom-logo { height: 26px; width: auto; display: block; }
+  .topbar .doc { font-size: 13px; color: var(--muted); }
+
+  /* footer */
+  .footer {
+    flex-shrink: 0;
+    border-top: 1px solid #eee;
+    display: flex;
+    justify-content: space-between;
+    font-size: 12.5px;
+    color: #bbb;
+    padding: 14px 0 18px;
+    margin-top: auto;
+  }
+
+  /* typography */
+  .eyebrow {
+    font-size: 11.5px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: #999;
+    font-weight: 600;
+    margin: 18px 0 8px;
+    flex-shrink: 0;
+  }
+  h1 {
+    font-size: 44px;
+    font-weight: 800;
+    color: var(--navy);
+    letter-spacing: -.025em;
+    line-height: 1.08;
+    flex-shrink: 0;
+  }
+  h1 .hl {
+    background: var(--accent);
+    padding: 0 .1em;
+    border-radius: 5px;
+  }
+
+  /* ── body area: fills all remaining vertical space ── */
+  .body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* cards */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    padding: 20px 24px;
+  }
+  .card.dark { background: #151515; border-color: #151515; }
+  .card.green { background: var(--accent); border-color: var(--accent-border); }
+
+  .lbl {
+    font-size: 11px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: #999;
+    font-weight: 700;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .card.dark .lbl { color: #9ecf6a; }
+  .card.green .lbl { color: var(--accent-dark); }
+
+  .num {
+    font-size: 36px;
+    font-weight: 800;
+    color: var(--navy);
+    letter-spacing: -.02em;
+    line-height: 1;
+  }
+  .card.dark .num { color: #fff; }
+  .sub {
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 8px;
+    line-height: 1.4;
+  }
+  .card.dark .sub { color: #9ecf6a; }
+  .card.green .sub { color: var(--accent-dark); }
+
+  /* insight */
+  .insight {
+    background: var(--accent);
+    border: 1px solid var(--accent-border);
+    border-radius: 12px;
+    padding: 16px 22px;
+    font-size: 14.5px;
+    line-height: 1.65;
+    flex-shrink: 0;
+  }
+  .insight strong { color: #151515; }
+  .insight .tag {
+    background: #fff;
+    font-weight: 800;
+    color: #151515;
+    padding: 1px 7px;
+    border-radius: 4px;
+    font-size: 13px;
+  }
+
+  /* pill */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border-radius: 20px;
+    padding: 5px 14px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .pill.wa { background: #e0f5e8; color: #1a5c35; }
+  .pill.chat { background: #e8edff; color: #1a3591; }
+  .pill.ig { background: #fde8f5; color: #8b1a6b; }
+
+  /* bar */
+  .bar-track { background: #e8e8e4; border-radius: 4px; height: 9px; }
+  .bar-fill { height: 9px; border-radius: 4px; }
+
+  /* cluster */
+  .cluster {
+    border-radius: 12px;
+    padding: 18px 20px;
+    border: 1px solid var(--card-border);
+    background: var(--card);
+  }
+  .cluster.top { background: var(--accent); border-color: var(--accent-border); }
+  .cluster .badge {
+    background: #151515;
+    color: var(--accent);
+    font-weight: 800;
+    font-size: 11.5px;
+    padding: 2px 9px;
+    border-radius: 20px;
+  }
+  .cluster .chead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .cluster .clbl { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; font-weight: 700; color: #999; }
+  .cluster.top .clbl { color: var(--accent-dark); }
+  .cluster .ctext { font-size: 15.5px; font-weight: 600; color: var(--navy); line-height: 1.4; font-style: italic; }
+
+  /* action */
+  .action { border-radius: 12px; padding: 20px 22px; border: 1px solid var(--card-border); background: var(--card); }
+  .action.top { background: var(--accent); border-color: var(--accent-border); }
+  .action .ahead { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .action .atitle { font-size: 15px; font-weight: 700; color: var(--navy); }
+  .action .abody { font-size: 13.5px; line-height: 1.65; color: #444; }
+
+  /* grid helpers */
+  .g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .g3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; }
+  .g4 { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; }
+
+  /* chart label */
+  .chart-label { font-size: 12px; color: #aaa; font-family: Inter, sans-serif; }
+</style>
+</head>
+<body>
+
+<section class="slide">
+  <div class="topbar">
+    <div class="logo"><svg class="mom-logo" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 429.8 59.7">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: currentColor;
+      }
+    </style>
+  </defs>
+  
+  <g>
+    <g id="Laag_1">
+      <g>
+        <path class="cls-1" d="M204.8,11.6c-1.4,0-2.6.1-3.8.3-9.4,1.8-12.8,13.3-12.8,13.3,0,0,.2-1.2-1.3-5v-.3c-2.4-5.4-6.9-8.1-13.7-8.3-13.8.2-16.8,12.3-16.8,12.3v-10.8h-11.4v43h11.4v-22.4c0-6.8,7-12.2,13.8-12.2s6.9,2.7,6.9,9.1v25.4h11.4v-20.2c0-9.2,6.6-14.4,13.8-14.4s7,2.7,7,9.1v25.4h11.4v-25.4c0-18.7-14.5-19.2-16.1-19.2Z"/>
+        <path class="cls-1" d="M64.2,11.6c-1.4,0-2.6.1-3.8.3-9.4,1.8-12.8,13.3-12.8,13.3,0,0,.2-1.2-1.3-5v-.3c-2.4-5.4-6.9-8.1-13.7-8.3-13.8.2-16.8,12.3-16.8,12.3v-10.8H4.5v43h11.4v-22.4c0-6.8,7-12.2,13.8-12.2s6.9,2.7,6.9,9.1v25.4h11.4v-20.2c0-9.2,6.6-14.4,13.8-14.4s7,2.7,7,9.1v25.4h11.4v-25.4c0-18.7-14.5-19.2-16.1-19.2Z"/>
+        <path class="cls-1" d="M317.7,11.6c-13.5,0-16,12.4-16,12.4v-10.8h-11.4v43h11.4c0-1.4.5-12.2.5-20.8s7.2-13.8,14.2-13.8,7.8,2.3,7.8,9.1v25.4h11.4v-25.4c0-17.3-12.5-19.2-17.8-19.2Z"/>
+        <path class="cls-1" d="M270,13.1h-32.8s0,10.1,0,10.1c8.3-.5,18.8-3.7,24.4-5.5,2.1-.6,3.4-1.1,3.8-1.1h.2s0,8.6,0,8.6c-.2,0-.5-.1-.7-.2-5.2-1.1-11.3-.6-17.2,1.3-5.8,1.9-10.8,5.1-14,8.9-3.7,4.4-4.7,9.4-2.9,13.7,1.8,4.3,6.2,7.4,12.1,8.6,1.8.4,3.8.6,5.9.6s5.2-.3,7.8-.9c4.2-1,7.2-2.8,9-4.2v3.2h11.6s0-35.5,0-35.5c0-5.1-2.4-7.6-7.3-7.6ZM265.6,37.1v5.3l-.2.3c-2.1,2.1-5.2,3.9-8.7,5.1-4,1.3-8.2,1.6-11.5,1-1.5-.3-4.2-1.1-5-3-.8-1.8.6-3.9,1.6-5,2-2.4,5.5-4.6,9.4-5.9,3.9-1.3,8.2-1.6,11.5-1,.6.1,1.8.4,2.9,1h0v2.2Z"/>
+        <path class="cls-1" d="M407,29.6c-8.2-1.3-10.7-2.5-10.7-5.1s2.2-4,8.7-4,9,1.7,9.1,6.1h9.6s.4-11.3-12.3-14.3c-.1,0-.3,0-.4,0-1.8-.4-3.8-.6-6.1-.6-11.6,0-18.6,5-18.6,13.2s7.6,12.2,18.9,14c7.5,1.2,10.2,2.2,10.2,5.6s-2.9,4.3-9.3,4.3-10.5-1.2-10.5-7.4h-11.2c.1,15.1,16.6,16.2,21.7,16.2,9.9,0,20.5-3.5,20.5-13.1s-9.4-13.2-19.6-14.8Z"/>
+        <path class="cls-1" d="M362,49.6v-27h.2s13.7,0,13.7,0v-9.3h-15.2s1.3-2.7,1.3-10.5h-11.4v10.5h-5.6v9.6h5.6v25.9c0,5.1,2.4,7.5,7.2,7.5h19.9v-9.4c-9.7.2-15.3,2.6-15.4,2.6h-.3Z"/>
+        <path class="cls-1" d="M112.7,11c-13.3,0-24.1,10.5-24.1,23.6.8,7.6,3.6,13.1,7.3,16.9,1.8,1.7,3.9,3.2,6.2,4.3,11.7,5.3,27.5-.3,32.9-12,1.2-2.8,1.9-5.9,1.9-9.1,0-13-10.8-23.6-24.1-23.6ZM125.8,35.2c-1.4,2.4-3.1,4.5-5.3,6.3-2.2,1.8-4.7,3-7.5,3.8-2.7.7-5.2.9-7.6.4-2.4-.5-4.4-1.5-6.1-3.1-1.7-1.6-2.9-3.6-3.5-6-.7-2.5-.7-4.8,0-7.1s1.9-4.2,3.6-5.8c1.8-1.7,4-2.9,6.7-3.6,2.8-.8,5.6-1,8.4-.6,2.8.4,5.4,1.3,7.7,2.7,2.4,1.4,5.7,4.5,6,5.4.3.9-1.1,5.2-2.4,7.7Z"/>
+      </g>
+    </g>
+  </g>
+</svg></div>
+    <div class="doc">{{event_name}} · Conversation Analysis</div>
+  </div>
+  <div class="body" style="flex-direction:row;gap:52px;align-items:center;padding:20px 0 0">
+    <!-- left -->
+    <div style="flex:1;min-width:0">
+      <div class="eyebrow" style="margin-top:0">{{event_name}} · Conversation Analysis</div>
+      <h1>{{conversations_total}} gesprekken,<br><span class="hl">{{avg_sentiment_label}}</span> sentiment.</h1>
+      <p style="font-size:16px;line-height:1.8;color:#444;margin-top:18px;max-width:680px">
+        In de periode {{date_range}} verwerkte de Momants-agent <strong>{{conversations_total}} gesprekken</strong>
+        via WhatsApp, Instagram en chat — goed voor {{messages_total}} berichten.
+        {{pct_resolved}}% werd opgelost zonder menselijke tussenkomst.
+        De gemiddelde stemming verbeterde van {{avg_start_stars}} naar {{avg_end_stars}} sterren gedurende een gesprek.
+      </p>
+      <div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap">
+        <span class="pill wa">💬 WhatsApp · {{channel_whatsapp_count}}</span>
+        <span class="pill chat">🖥 Chat · {{channel_chat_count}}</span>
+        <span class="pill ig">📸 Instagram · {{channel_instagram_count}}</span>
+      </div>
+    </div>
+    <!-- right panel -->
+    <div style="width:320px;flex-shrink:0;background:var(--accent);border:1px solid var(--accent-border);border-radius:14px;padding:28px 26px">
+      <div class="lbl" style="color:var(--accent-dark)">Totaal gesprekken</div>
+      <div style="font-size:56px;font-weight:800;color:#151515;letter-spacing:-.03em;line-height:1">{{conversations_total}}</div>
+      <div style="font-size:13px;color:var(--accent-dark);margin-top:6px">{{date_range}}</div>
+      <div style="border-top:1px solid var(--accent-border);margin:18px 0"></div>
+      <div class="lbl" style="color:var(--accent-dark)">Gem. sentiment</div>
+      <div style="font-size:34px;font-weight:800;color:#151515;letter-spacing:-.02em">{{avg_stars}} / 5 ★</div>
+      <div style="font-size:13px;color:var(--accent-dark);margin-top:4px">{{avg_delta_stars}} verbetering per gesprek</div>
+      <div style="border-top:1px solid var(--accent-border);margin:18px 0"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div>
+          <div class="lbl" style="color:var(--accent-dark)">Opgelost</div>
+          <div style="font-size:28px;font-weight:800;color:#151515">{{pct_resolved}}%</div>
+        </div>
+        <div>
+          <div class="lbl" style="color:var(--accent-dark)">Takeover</div>
+          <div style="font-size:28px;font-weight:800;color:#151515">{{pct_takeover}}%</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>1 / 8</span></div>
+</section>
+
+<section class="slide">
+  <div class="topbar">
+    <div class="logo"><svg class="mom-logo" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 429.8 59.7">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: currentColor;
+      }
+    </style>
+  </defs>
+  
+  <g>
+    <g id="Laag_1">
+      <g>
+        <path class="cls-1" d="M204.8,11.6c-1.4,0-2.6.1-3.8.3-9.4,1.8-12.8,13.3-12.8,13.3,0,0,.2-1.2-1.3-5v-.3c-2.4-5.4-6.9-8.1-13.7-8.3-13.8.2-16.8,12.3-16.8,12.3v-10.8h-11.4v43h11.4v-22.4c0-6.8,7-12.2,13.8-12.2s6.9,2.7,6.9,9.1v25.4h11.4v-20.2c0-9.2,6.6-14.4,13.8-14.4s7,2.7,7,9.1v25.4h11.4v-25.4c0-18.7-14.5-19.2-16.1-19.2Z"/>
+        <path class="cls-1" d="M64.2,11.6c-1.4,0-2.6.1-3.8.3-9.4,1.8-12.8,13.3-12.8,13.3,0,0,.2-1.2-1.3-5v-.3c-2.4-5.4-6.9-8.1-13.7-8.3-13.8.2-16.8,12.3-16.8,12.3v-10.8H4.5v43h11.4v-22.4c0-6.8,7-12.2,13.8-12.2s6.9,2.7,6.9,9.1v25.4h11.4v-20.2c0-9.2,6.6-14.4,13.8-14.4s7,2.7,7,9.1v25.4h11.4v-25.4c0-18.7-14.5-19.2-16.1-19.2Z"/>
+        <path class="cls-1" d="M317.7,11.6c-13.5,0-16,12.4-16,12.4v-10.8h-11.4v43h11.4c0-1.4.5-12.2.5-20.8s7.2-13.8,14.2-13.8,7.8,2.3,7.8,9.1v25.4h11.4v-25.4c0-17.3-12.5-19.2-17.8-19.2Z"/>
+        <path class="cls-1" d="M270,13.1h-32.8s0,10.1,0,10.1c8.3-.5,18.8-3.7,24.4-5.5,2.1-.6,3.4-1.1,3.8-1.1h.2s0,8.6,0,8.6c-.2,0-.5-.1-.7-.2-5.2-1.1-11.3-.6-17.2,1.3-5.8,1.9-10.8,5.1-14,8.9-3.7,4.4-4.7,9.4-2.9,13.7,1.8,4.3,6.2,7.4,12.1,8.6,1.8.4,3.8.6,5.9.6s5.2-.3,7.8-.9c4.2-1,7.2-2.8,9-4.2v3.2h11.6s0-35.5,0-35.5c0-5.1-2.4-7.6-7.3-7.6ZM265.6,37.1v5.3l-.2.3c-2.1,2.1-5.2,3.9-8.7,5.1-4,1.3-8.2,1.6-11.5,1-1.5-.3-4.2-1.1-5-3-.8-1.8.6-3.9,1.6-5,2-2.4,5.5-4.6,9.4-5.9,3.9-1.3,8.2-1.6,11.5-1,.6.1,1.8.4,2.9,1h0v2.2Z"/>
+        <path class="cls-1" d="M407,29.6c-8.2-1.3-10.7-2.5-10.7-5.1s2.2-4,8.7-4,9,1.7,9.1,6.1h9.6s.4-11.3-12.3-14.3c-.1,0-.3,0-.4,0-1.8-.4-3.8-.6-6.1-.6-11.6,0-18.6,5-18.6,13.2s7.6,12.2,18.9,14c7.5,1.2,10.2,2.2,10.2,5.6s-2.9,4.3-9.3,4.3-10.5-1.2-10.5-7.4h-11.2c.1,15.1,16.6,16.2,21.7,16.2,9.9,0,20.5-3.5,20.5-13.1s-9.4-13.2-19.6-14.8Z"/>
+        <path class="cls-1" d="M362,49.6v-27h.2s13.7,0,13.7,0v-9.3h-15.2s1.3-2.7,1.3-10.5h-11.4v10.5h-5.6v9.6h5.6v25.9c0,5.1,2.4,7.5,7.2,7.5h19.9v-9.4c-9.7.2-15.3,2.6-15.4,2.6h-.3Z"/>
+        <path class="cls-1" d="M112.7,11c-13.3,0-24.1,10.5-24.1,23.6.8,7.6,3.6,13.1,7.3,16.9,1.8,1.7,3.9,3.2,6.2,4.3,11.7,5.3,27.5-.3,32.9-12,1.2-2.8,1.9-5.9,1.9-9.1,0-13-10.8-23.6-24.1-23.6ZM125.8,35.2c-1.4,2.4-3.1,4.5-5.3,6.3-2.2,1.8-4.7,3-7.5,3.8-2.7.7-5.2.9-7.6.4-2.4-.5-4.4-1.5-6.1-3.1-1.7-1.6-2.9-3.6-3.5-6-.7-2.5-.7-4.8,0-7.1s1.9-4.2,3.6-5.8c1.8-1.7,4-2.9,6.7-3.6,2.8-.8,5.6-1,8.4-.6,2.8.4,5.4,1.3,7.7,2.7,2.4,1.4,5.7,4.5,6,5.4.3.9-1.1,5.2-2.4,7.7Z"/>
+      </g>
+    </g>
+  </g>
+</svg></div>
+    <div class="doc">{{event_name}} · Conversation Analysis</div>
+  </div>
+  <div class="eyebrow">Gespreksvolume</div>
+  <h1>Wanneer was het het drukst?</h1>
+  <div class="body" style="flex-direction:row;gap:22px;padding-top:14px">
+    <!-- chart -->
+    <div class="card" style="flex:1;min-width:0;padding:20px 24px;display:flex;flex-direction:column">
+      <div style="font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:12px">Gesprekken per dag · {{date_range}}</div>
+      <svg viewBox="0 0 800 210" style="width:100%;flex:1" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="vg" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#E2F5C9" stop-opacity=".85"/>
+            <stop offset="100%" stop-color="#E2F5C9" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        {{chart_slide2_inner}}
+      </svg>
+    </div>
+    <!-- stat cards -->
+    <div style="width:240px;flex-shrink:0;display:flex;flex-direction:column;gap:14px">
+      <div class="card dark" style="flex:1">
+        <div class="lbl">📅 Drukste dag</div>
+        <div class="num" style="font-size:28px">{{peak_day_name}}</div>
+        <div class="sub">{{peak_day_count}} gesprekken · {{peak_day_label}}</div>
+      </div>
+      <div class="card" style="flex:1">
+        <div class="lbl">📊 Gem. per dag</div>
+        <div class="num">{{avg_conversations_per_day}}</div>
+        <div class="sub">gesprekken / dag</div>
+      </div>
+      <div class="card" style="flex:1">
+        <div class="lbl">🕐 Drukste uur</div>
+        <div class="num" style="font-size:22px">{{peak_hour}}</div>
+        <div class="sub">gem. {{peak_hour_avg}} gesprekken / uur</div>
+      </div>
+    </div>
+  </div>
+  <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>2 / 8</span></div>
+</section>
+
+<section class="slide">
+  <div class="topbar">
+    <div class="logo"><svg class="mom-logo" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 429.8 59.7">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: currentColor;
+      }
+    </style>
+  </defs>
+  
+  <g>
+    <g id="Laag_1">
+      <g>
+        <path class="cls-1" d="M204.8,11.6c-1.4,0-2.6.1-3.8.3-9.4,1.8-12.8,13.3-12.8,13.3,0,0,.2-1.2-1.3-5v-.3c-2.4-5.4-6.9-8.1-13.7-8.3-13.8.2-16.8,12.3-16.8,12.3v-10.8h-11.4v43h11.4v-22.4c0-6.8,7-12.2,13.8-12.2s6.9,2.7,6.9,9.1v25.4h11.4v-20.2c0-9.2,6.6-14.4,13.8-14.4s7,2.7,7,9.1v25.4h11.4v-25.4c0-18.7-14.5-19.2-16.1-19.2Z"/>
+        <path class="cls-1" d="M64.2,11.6c-1.4,0-2.6.1-3.8.3-9.4,1.8-12.8,13.3-12.8,13.3,0,0,.2-1.2-1.3-5v-.3c-2.4-5.4-6.9-8.1-13.7-8.3-13.8.2-16.8,12.3-16.8,12.3v-10.8H4.5v43h11.4v-22.4c0-6.8,7-12.2,13.8-12.2s6.9,2.7,6.9,9.1v25.4h11.4v-20.2c0-9.2,6.6-14.4,13.8-14.4s7,2.7,7,9.1v25.4h11.4v-25.4c0-18.7-14.5-19.2-16.1-19.2Z"/>
+        <path class="cls-1" d="M317.7,11.6c-13.5,0-16,12.4-16,12.4v-10.8h-11.4v43h11.4c0-1.4.5-12.2.5-20.8s7.2-13.8,14.2-13.8,7.8,2.3,7.8,9.1v25.4h11.4v-25.4c0-17.3-12.5-19.2-17.8-19.2Z"/>
+        <path class="cls-1" d="M270,13.1h-32.8s0,10.1,0,10.1c8.3-.5,18.8-3.7,24.4-5.5,2.1-.6,3.4-1.1,3.8-1.1h.2s0,8.6,0,8.6c-.2,0-.5-.1-.7-.2-5.2-1.1-11.3-.6-17.2,1.3-5.8,1.9-10.8,5.1-14,8.9-3.7,4.4-4.7,9.4-2.9,13.7,1.8,4.3,6.2,7.4,12.1,8.6,1.8.4,3.8.6,5.9.6s5.2-.3,7.8-.9c4.2-1,7.2-2.8,9-4.2v3.2h11.6s0-35.5,0-35.5c0-5.1-2.4-7.6-7.3-7.6ZM265.6,37.1v5.3l-.2.3c-2.1,2.1-5.2,3.9-8.7,5.1-4,1.3-8.2,1.6-11.5,1-1.5-.3-4.2-1.1-5-3-.8-1.8.6-3.9,1.6-5,2-2.4,5.5-4.6,9.4-5.9,3.9-1.3,8.2-1.6,11.5-1,.6.1,1.8.4,2.9,1h0v2.2Z"/>
+        <path class="cls-1" d="M407,29.6c-8.2-1.3-10.7-2.5-10.7-5.1s2.2-4,8.7-4,9,1.7,9.1,6.1h9.6s.4-11.3-12.3-14.3c-.1,0-.3,0-.4,0-1.8-.4-3.8-.6-6.1-.6-11.6,0-18.6,5-18.6,13.2s7.6,12.2,18.9,14c7.5,1.2,10.2,2.2,10.2,5.6s-2.9,4.3-9.3,4.3-10.5-1.2-10.5-7.4h-11.2c.1,15.1,16.6,16.2,21.7,16.2,9.9,0,20.5-3.5,20.5-13.1s-9.4-13.2-19.6-14.8Z"/>
+        <path class="cls-1" d="M362,49.6v-27h.2s13.7,0,13.7,0v-9.3h-15.2s1.3-2.7,1.3-10.5h-11.4v10.5h-5.6v9.6h5.6v25.9c0,5.1,2.4,7.5,7.2,7.5h19.9v-9.4c-9.7.2-15.3,2.6-15.4,2.6h-.3Z"/>
+        <path class="cls-1" d="M112.7,11c-13.3,0-24.1,10.5-24.1,23.6.8,7.6,3.6,13.1,7.3,16.9,1.8,1.7,3.9,3.2,6.2,4.3,11.7,5.3,27.5-.3,32.9-12,1.2-2.8,1.9-5.9,1.9-9.1,0-13-10.8-23.6-24.1-23.6ZM125.8,35.2c-1.4,2.4-3.1,4.5-5.3,6.3-2.2,1.8-4.7,3-7.5,3.8-2.7.7-5.2.9-7.6.4-2.4-.5-4.4-1.5-6.1-3.1-1.7-1.6-2.9-3.6-3.5-6-.7-2.5-.7-4.8,0-7.1s1.9-4.2,3.6-5.8c1.8-1.7,4-2.9,6.7-3.6,2.8-.8,5.6-1,8.4-.6,2.8.4,5.4,1.3,7.7,2.7,2.4,1.4,5.7,4.5,6,5.4.3.9-1.1,5.2-2.4,7.7Z"/>
+      </g>
+    </g>
+  </g>
+</svg></div>
+    <div class="doc">{{event_name}} · Conversation Analysis</div>
+  </div>
+  <div class="eyebrow">Kanalen &amp; timing</div>
+  <h1>Waar en wanneer praten leden?</h1>
+  <div class="body" style="flex-direction:row;gap:18px;padding-top:14px">
+    <!-- channel card -->
+    <div class="card" style="flex:1.1;min-width:0;padding:22px 26px;display:flex;flex-direction:column;gap:0">
+      <div style="font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:16px">Gesprekken per kanaal</div>
+      <div style="display:flex;flex-direction:column;gap:14px;flex:1">
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
+            <span style="font-weight:600;font-size:14.5px">💬 WhatsApp</span>
+            <span style="font-weight:800;font-size:14.5px">{{channel_whatsapp_count}} <span style="color:var(--muted);font-weight:400;font-size:12px">{{channel_whatsapp_pct}}%</span></span>
+          </div>
+          <div class="bar-track"><div class="bar-fill" style="background:#151515;width:{{channel_whatsapp_pct}}%"></div></div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
+            <span style="font-weight:600;font-size:14.5px">🖥 Chat</span>
+            <span style="font-weight:800;font-size:14.5px">{{channel_chat_count}} <span style="color:var(--muted);font-weight:400;font-size:12px">{{channel_chat_pct}}%</span></span>
+          </div>
+          <div class="bar-track"><div class="bar-fill" style="background:#151515;width:{{channel_chat_pct}}%"></div></div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
+            <span style="font-weight:600;font-size:14.5px">📸 Instagram</span>
+            <span style="font-weight:800;font-size:14.5px">{{channel_instagram_count}} <span style="color:var(--muted);font-weight:400;font-size:12px">{{channel_instagram_pct}}%</span></span>
+          </div>
+          <div class="bar-track"><div class="bar-fill" style="background:#9ecf6a;width:{{channel_instagram_pct}}%"></div></div>
+        </div>
+      </div>
+      <div style="border-top:1px solid #eee;margin-top:18px;padding-top:16px">
+        <div style="font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:14px">Gem. sentiment per kanaal</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr)">
+          <div style="text-align:center"><div style="font-size:22px;font-weight:800">{{sentiment_whatsapp}} ★</div><div style="font-size:12px;color:var(--muted);margin-top:3px">WhatsApp</div></div>
+          <div style="text-align:center"><div style="font-size:22px;font-weight:800">{{sentiment_chat}} ★</div><div style="font-size:12px;color:var(--muted);margin-top:3px">Chat</div></div>
+          <div style="text-align:center"><div style="font-size:22px;font-weight:800">{{sentiment_instagram}} ★</div><div style="font-size:12px;color:var(--muted);margin-top:3px">Instagram</div></div>
+        </div>
+      </div>
+    </div>
+    <!-- hour chart -->
+    <div class="card" style="flex:1;min-width:0;padding:22px 26px;display:flex;flex-direction:column">
+      <div style="font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:12px">Gesprekken per uur van de dag (gem.)</div>
+      <svg viewBox="0 0 384 175" style="width:100%;flex:1" xmlns="http://www.w3.org/2000/svg">
+        {{chart_slide3_inner}}
+      </svg>
+    </div>
+  </div>
+  <div class="insight" style="margin-top:14px">
+    <strong>Key Insight</strong> · {{dominant_channel}} is het dominante kanaal (<span class="tag">{{dominant_channel_pct}}%</span>) met het hoogste sentiment ({{highest_sentiment_channel}} · {{highest_sentiment_score}}★).
+    De avondpiek om {{peak_hour}} vraagt om voldoende agent-capaciteit of proactieve FAQ-content op dat moment.
+  </div>
+  <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>3 / 8</span></div>
+</section>
+
+<section class="slide">
+  <div class="topbar">
+    <div class="logo"><svg class="mom-logo" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 429.8 59.7">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: currentColor;
+      }
+    </style>
+  </defs>
+  
+  <g>
+    <g id="Laag_1">
+      <g>
+        <path class="cls-1" d="M204.8,11.6c-1.4,0-2.6.1-3.8.3-9.4,1.8-12.8,13.3-12.8,13.3,0,0,.2-1.2-1.3-5v-.3c-2.4-5.4-6.9-8.1-13.7-8.3-13.8.2-16.8,12.3-16.8,12.3v-10.8h-11.4v43h11.4v-22.4c0-6.8,7-12.2,13.8-12.2s6.9,2.7,6.9,9.1v25.4h11.4v-20.2c0-9.2,6.6-14.4,13.8-14.4s7,2.7,7,9.1v25.4h11.4v-25.4c0-18.7-14.5-19.2-16.1-19.2Z"/>
+        <path class="cls-1" d="M64.2,11.6c-1.4,0-2.6.1-3.8.3-9.4,1.8-12.8,13.3-12.8,13.3,0,0,.2-1.2-1.3-5v-.3c-2.4-5.4-6.9-8.1-13.7-8.3-13.8.2-16.8,12.3-16.8,12.3v-10.8H4.5v43h11.4v-22.4c0-6.8,7-12.2,13.8-12.2s6.9,2.7,6.9,9.1v25.4h11.4v-20.2c0-9.2,6.6-14.4,13.8-14.4s7,2.7,7,9.1v25.4h11.4v-25.4c0-18.7-14.5-19.2-16.1-19.2Z"/>
+        <path class="cls-1" d="M317.7,11.6c-13.5,0-16,12.4-16,12.4v-10.8h-11.4v43h11.4c0-1.4.5-12.2.5-20.8s7.2-13.8,14.2-13.8,7.8,2.3,7.8,9.1v25.4h11.4v-25.4c0-17.3-12.5-19.2-17.8-19.2Z"/>
+        <path class="cls-1" d="M270,13.1h-32.8s0,10.1,0,10.1c8.3-.5,18.8-3.7,24.4-5.5,2.1-.6,3.4-1.1,3.8-1.1h.2s0,8.6,0,8.6c-.2,0-.5-.1-.7-.2-5.2-1.1-11.3-.6-17.2,1.3-5.8,1.9-10.8,5.1-14,8.9-3.7,4.4-4.7,9.4-2.9,13.7,1.8,4.3,6.2,7.4,12.1,8.6,1.8.4,3.8.6,5.9.6s5.2-.3,7.8-.9c4.2-1,7.2-2.8,9-4.2v3.2h11.6s0-35.5,0-35.5c0-5.1-2.4-7.6-7.3-7.6ZM265.6,37.1v5.3l-.2.3c-2.1,2.1-5.2,3.9-8.7,5.1-4,1.3-8.2,1.6-11.5,1-1.5-.3-4.2-1.1-5-3-.8-1.8.6-3.9,1.6-5,2-2.4,5.5-4.6,9.4-5.9,3.9-1.3,8.2-1.6,11.5-1,.6.1,1.8.4,2.9,1h0v2.2Z"/>
+        <path class="cls-1" d="M407,29.6c-8.2-1.3-10.7-2.5-10.7-5.1s2.2-4,8.7-4,9,1.7,9.1,6.1h9.6s.4-11.3-12.3-14.3c-.1,0-.3,0-.4,0-1.8-.4-3.8-.6-6.1-.6-11.6,0-18.6,5-18.6,13.2s7.6,12.2,18.9,14c7.5,1.2,10.2,2.2,10.2,5.6s-2.9,4.3-9.3,4.3-10.5-1.2-10.5-7.4h-11.2c.1,15.1,16.6,16.2,21.7,16.2,9.9,0,20.5-3.5,20.5-13.1s-9.4-13.2-19.6-14.8Z"/>
+        <path class="cls-1" d="M362,49.6v-27h.2s13.7,0,13.7,0v-9.3h-15.2s1.3-2.7,1.3-10.5h-11.4v10.5h-5.6v9.6h5.6v25.9c0,5.1,2.4,7.5,7.2,7.5h19.9v-9.4c-9.7.2-15.3,2.6-15.4,2.6h-.3Z"/>
+        <path class="cls-1" d="M112.7,11c-13.3,0-24.1,10.5-24.1,23.6.8,7.6,3.6,13.1,7.3,16.9,1.8,1.7,3.9,3.2,6.2,4.3,11.7,5.3,27.5-.3,32.9-12,1.2-2.8,1.9-5.9,1.9-9.1,0-13-10.8-23.6-24.1-23.6ZM125.8,35.2c-1.4,2.4-3.1,4.5-5.3,6.3-2.2,1.8-4.7,3-7.5,3.8-2.7.7-5.2.9-7.6.4-2.4-.5-4.4-1.5-6.1-3.1-1.7-1.6-2.9-3.6-3.5-6-.7-2.5-.7-4.8,0-7.1s1.9-4.2,3.6-5.8c1.8-1.7,4-2.9,6.7-3.6,2.8-.8,5.6-1,8.4-.6,2.8.4,5.4,1.3,7.7,2.7,2.4,1.4,5.7,4.5,6,5.4.3.9-1.1,5.2-2.4,7.7Z"/>
+      </g>
+    </g>
+  </g>
+</svg></div>
+    <div class="doc">{{event_name}} · Conversation Analysis</div>
+  </div>
+  <div class="eyebrow">Sentiment</div>
+  <h1>Hoe ontwikkelt de stemming<br>zich door een gesprek?</h1>
+  <div class="body" style="flex-direction:row;gap:22px;padding-top:14px">
+    <!-- chart -->
+    <div class="card" style="flex:1;min-width:0;padding:20px 24px;display:flex;flex-direction:column">
+      <div style="font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:8px">Gem. sentiment per bericht in het gesprek (bericht #1 → #10)</div>
+      <svg viewBox="0 0 700 210" style="width:100%;flex:1" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#E2F5C9" stop-opacity=".8"/>
+            <stop offset="100%" stop-color="#E2F5C9" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        {{chart_slide4_inner}}
+      </svg>
+    </div>
+    <!-- stats -->
+    <div style="width:230px;flex-shrink:0;display:flex;flex-direction:column;gap:12px">
+      <div class="card dark" style="flex:1">
+        <div class="lbl">📈 Gem. delta</div>
+        <div class="num">+{{avg_delta_stars}} ★</div>
+        <div class="sub">start → einde gesprek</div>
+      </div>
+      <div class="card green" style="flex:1">
+        <div class="lbl">✅ Improving</div>
+        <div class="num">{{pct_trajectory_improving}}%</div>
+        <div class="sub">van gesprekken verbeterd</div>
+      </div>
+      <div class="card" style="flex:1">
+        <div class="lbl">📉 Declining</div>
+        <div class="num">{{pct_trajectory_declining}}%</div>
+        <div class="sub">eindigde negatiever</div>
+      </div>
+      <div class="card" style="flex:1">
+        <div class="lbl">➡️ Flat / mixed</div>
+        <div class="num">{{pct_trajectory_mixed}}%</div>
+        <div class="sub">geen duidelijke richting</div>
+      </div>
+    </div>
+  </div>
+  <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>4 / 8</span></div>
+</section>
+
+<section class="slide">
+  <div class="topbar">
+    <div class="logo"><svg class="mom-logo" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 429.8 59.7">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: currentColor;
+      }
+    </style>
+  </defs>
+  
+  <g>
+    <g id="Laag_1">
+      <g>
+        <path class="cls-1" d="M204.8,11.6c-1.4,0-2.6.1-3.8.3-9.4,1.8-12.8,13.3-12.8,13.3,0,0,.2-1.2-1.3-5v-.3c-2.4-5.4-6.9-8.1-13.7-8.3-13.8.2-16.8,12.3-16.8,12.3v-10.8h-11.4v43h11.4v-22.4c0-6.8,7-12.2,13.8-12.2s6.9,2.7,6.9,9.1v25.4h11.4v-20.2c0-9.2,6.6-14.4,13.8-14.4s7,2.7,7,9.1v25.4h11.4v-25.4c0-18.7-14.5-19.2-16.1-19.2Z"/>
+        <path class="cls-1" d="M64.2,11.6c-1.4,0-2.6.1-3.8.3-9.4,1.8-12.8,13.3-12.8,13.3,0,0,.2-1.2-1.3-5v-.3c-2.4-5.4-6.9-8.1-13.7-8.3-13.8.2-16.8,12.3-16.8,12.3v-10.8H4.5v43h11.4v-22.4c0-6.8,7-12.2,13.8-12.2s6.9,2.7,6.9,9.1v25.4h11.4v-20.2c0-9.2,6.6-14.4,13.8-14.4s7,2.7,7,9.1v25.4h11.4v-25.4c0-18.7-14.5-19.2-16.1-19.2Z"/>
+        <path class="cls-1" d="M317.7,11.6c-13.5,0-16,12.4-16,12.4v-10.8h-11.4v43h11.4c0-1.4.5-12.2.5-20.8s7.2-13.8,14.2-13.8,7.8,2.3,7.8,9.1v25.4h11.4v-25.4c0-17.3-12.5-19.2-17.8-19.2Z"/>
+        <path class="cls-1" d="M270,13.1h-32.8s0,10.1,0,10.1c8.3-.5,18.8-3.7,24.4-5.5,2.1-.6,3.4-1.1,3.8-1.1h.2s0,8.6,0,8.6c-.2,0-.5-.1-.7-.2-5.2-1.1-11.3-.6-17.2,1.3-5.8,1.9-10.8,5.1-14,8.9-3.7,4.4-4.7,9.4-2.9,13.7,1.8,4.3,6.2,7.4,12.1,8.6,1.8.4,3.8.6,5.9.6s5.2-.3,7.8-.9c4.2-1,7.2-2.8,9-4.2v3.2h11.6s0-35.5,0-35.5c0-5.1-2.4-7.6-7.3-7.6ZM265.6,37.1v5.3l-.2.3c-2.1,2.1-5.2,3.9-8.7,5.1-4,1.3-8.2,1.6-11.5,1-1.5-.3-4.2-1.1-5-3-.8-1.8.6-3.9,1.6-5,2-2.4,5.5-4.6,9.4-5.9,3.9-1.3,8.2-1.6,11.5-1,.6.1,1.8.4,2.9,1h0v2.2Z"/>
+        <path class="cls-1" d="M407,29.6c-8.2-1.3-10.7-2.5-10.7-5.1s2.2-4,8.7-4,9,1.7,9.1,6.1h9.6s.4-11.3-12.3-14.3c-.1,0-.3,0-.4,0-1.8-.4-3.8-.6-6.1-.6-11.6,0-18.6,5-18.6,13.2s7.6,12.2,18.9,14c7.5,1.2,10.2,2.2,10.2,5.6s-2.9,4.3-9.3,4.3-10.5-1.2-10.5-7.4h-11.2c.1,15.1,16.6,16.2,21.7,16.2,9.9,0,20.5-3.5,20.5-13.1s-9.4-13.2-19.6-14.8Z"/>
+        <path class="cls-1" d="M362,49.6v-27h.2s13.7,0,13.7,0v-9.3h-15.2s1.3-2.7,1.3-10.5h-11.4v10.5h-5.6v9.6h5.6v25.9c0,5.1,2.4,7.5,7.2,7.5h19.9v-9.4c-9.7.2-15.3,2.6-15.4,2.6h-.3Z"/>
+        <path class="cls-1" d="M112.7,11c-13.3,0-24.1,10.5-24.1,23.6.8,7.6,3.6,13.1,7.3,16.9,1.8,1.7,3.9,3.2,6.2,4.3,11.7,5.3,27.5-.3,32.9-12,1.2-2.8,1.9-5.9,1.9-9.1,0-13-10.8-23.6-24.1-23.6ZM125.8,35.2c-1.4,2.4-3.1,4.5-5.3,6.3-2.2,1.8-4.7,3-7.5,3.8-2.7.7-5.2.9-7.6.4-2.4-.5-4.4-1.5-6.1-3.1-1.7-1.6-2.9-3.6-3.5-6-.7-2.5-.7-4.8,0-7.1s1.9-4.2,3.6-5.8c1.8-1.7,4-2.9,6.7-3.6,2.8-.8,5.6-1,8.4-.6,2.8.4,5.4,1.3,7.7,2.7,2.4,1.4,5.7,4.5,6,5.4.3.9-1.1,5.2-2.4,7.7Z"/>
+      </g>
+    </g>
+  </g>
+</svg></div>
+    <div class="doc">{{event_name}} · Conversation Analysis</div>
+  </div>
+  <div class="eyebrow">Onbeantwoorde vragen</div>
+  <h1>Wat liet de agent liggen?</h1>
+  <div class="body" style="padding-top:14px;gap:14px">
+    <div class="g4" style="flex-shrink:0">
+      <div class="card dark">
+        <div class="lbl">❓ Totaal onbeantwoord</div>
+        <div class="num" style="font-size:44px">{{total_unanswered_questions}}</div>
+        <div class="sub">unieke vragen</div>
+      </div>
+      <div class="card">
+        <div class="lbl">🔇 Geen reply</div>
+        <div class="num" style="font-size:44px">{{unanswered_no_reply_count}}</div>
+        <div class="sub">volledig genegeerd</div>
+      </div>
+      <div class="card">
+        <div class="lbl">💬 Zwak antwoord</div>
+        <div class="num" style="font-size:44px">{{unanswered_weak_answer_count}}</div>
+        <div class="sub">onvoldoende respons</div>
+      </div>
+      <div class="card">
+        <div class="lbl">🎯 Semantisch gemist</div>
+        <div class="num" style="font-size:44px">{{unanswered_semantic_count}}</div>
+        <div class="sub">antwoord miste de kern</div>
+      </div>
+    </div>
+    <!-- recent questions -->
+    <div class="card" style="flex:1;min-height:0;padding:18px 22px">
+      <div class="lbl" style="margin-bottom:12px">🕐 Recente onbeantwoorde vragen</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;height:calc(100% - 32px)">
+        <div style="background:#fff;border:1px solid #e8e8e4;border-radius:8px;padding:14px 16px;font-size:14px;font-style:italic;color:#333;line-height:1.5">"{{unanswered_example_1}}"</div>
+        <div style="background:#fff;border:1px solid #e8e8e4;border-radius:8px;padding:14px 16px;font-size:14px;font-style:italic;color:#333;line-height:1.5">"{{unanswered_example_2}}"</div>
+        <div style="background:#fff;border:1px solid #e8e8e4;border-radius:8px;padding:14px 16px;font-size:14px;font-style:italic;color:#333;line-height:1.5">"{{unanswered_example_3}}"</div>
+      </div>
+    </div>
+    <div class="insight">
+      <strong>Key Insight</strong> · <span class="tag">{{unanswered_no_reply_count}} vragen</span> kregen überhaupt geen reactie.
+      Dit zijn directe trainingsopportuniteiten — elke vraag zonder antwoord is een lid dat gefrustreerd afhaakte.
+    </div>
+  </div>
+  <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>5 / 8</span></div>
+</section>
+
+<section class="slide">
+  <div class="topbar">
+    <div class="logo"><svg class="mom-logo" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 429.8 59.7">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: currentColor;
+      }
+    </style>
+  </defs>
+  
+  <g>
+    <g id="Laag_1">
+      <g>
+        <path class="cls-1" d="M204.8,11.6c-1.4,0-2.6.1-3.8.3-9.4,1.8-12.8,13.3-12.8,13.3,0,0,.2-1.2-1.3-5v-.3c-2.4-5.4-6.9-8.1-13.7-8.3-13.8.2-16.8,12.3-16.8,12.3v-10.8h-11.4v43h11.4v-22.4c0-6.8,7-12.2,13.8-12.2s6.9,2.7,6.9,9.1v25.4h11.4v-20.2c0-9.2,6.6-14.4,13.8-14.4s7,2.7,7,9.1v25.4h11.4v-25.4c0-18.7-14.5-19.2-16.1-19.2Z"/>
+        <path class="cls-1" d="M64.2,11.6c-1.4,0-2.6.1-3.8.3-9.4,1.8-12.8,13.3-12.8,13.3,0,0,.2-1.2-1.3-5v-.3c-2.4-5.4-6.9-8.1-13.7-8.3-13.8.2-16.8,12.3-16.8,12.3v-10.8H4.5v43h11.4v-22.4c0-6.8,7-12.2,13.8-12.2s6.9,2.7,6.9,9.1v25.4h11.4v-20.2c0-9.2,6.6-14.4,13.8-14.4s7,2.7,7,9.1v25.4h11.4v-25.4c0-18.7-14.5-19.2-16.1-19.2Z"/>
+        <path class="cls-1" d="M317.7,11.6c-13.5,0-16,12.4-16,12.4v-10.8h-11.4v43h11.4c0-1.4.5-12.2.5-20.8s7.2-13.8,14.2-13.8,7.8,2.3,7.8,9.1v25.4h11.4v-25.4c0-17.3-12.5-19.2-17.8-19.2Z"/>
+        <path class="cls-1" d="M270,13.1h-32.8s0,10.1,0,10.1c8.3-.5,18.8-3.7,24.4-5.5,2.1-.6,3.4-1.1,3.8-1.1h.2s0,8.6,0,8.6c-.2,0-.5-.1-.7-.2-5.2-1.1-11.3-.6-17.2,1.3-5.8,1.9-10.8,5.1-14,8.9-3.7,4.4-4.7,9.4-2.9,13.7,1.8,4.3,6.2,7.4,12.1,8.6,1.8.4,3.8.6,5.9.6s5.2-.3,7.8-.9c4.2-1,7.2-2.8,9-4.2v3.2h11.6s0-35.5,0-35.5c0-5.1-2.4-7.6-7.3-7.6ZM265.6,37.1v5.3l-.2.3c-2.1,2.1-5.2,3.9-8.7,5.1-4,1.3-8.2,1.6-11.5,1-1.5-.3-4.2-1.1-5-3-.8-1.8.6-3.9,1.6-5,2-2.4,5.5-4.6,9.4-5.9,3.9-1.3,8.2-1.6,11.5-1,.6.1,1.8.4,2.9,1h0v2.2Z"/>
+        <path class="cls-1" d="M407,29.6c-8.2-1.3-10.7-2.5-10.7-5.1s2.2-4,8.7-4,9,1.7,9.1,6.1h9.6s.4-11.3-12.3-14.3c-.1,0-.3,0-.4,0-1.8-.4-3.8-.6-6.1-.6-11.6,0-18.6,5-18.6,13.2s7.6,12.2,18.9,14c7.5,1.2,10.2,2.2,10.2,5.6s-2.9,4.3-9.3,4.3-10.5-1.2-10.5-7.4h-11.2c.1,15.1,16.6,16.2,21.7,16.2,9.9,0,20.5-3.5,20.5-13.1s-9.4-13.2-19.6-14.8Z"/>
+        <path class="cls-1" d="M362,49.6v-27h.2s13.7,0,13.7,0v-9.3h-15.2s1.3-2.7,1.3-10.5h-11.4v10.5h-5.6v9.6h5.6v25.9c0,5.1,2.4,7.5,7.2,7.5h19.9v-9.4c-9.7.2-15.3,2.6-15.4,2.6h-.3Z"/>
+        <path class="cls-1" d="M112.7,11c-13.3,0-24.1,10.5-24.1,23.6.8,7.6,3.6,13.1,7.3,16.9,1.8,1.7,3.9,3.2,6.2,4.3,11.7,5.3,27.5-.3,32.9-12,1.2-2.8,1.9-5.9,1.9-9.1,0-13-10.8-23.6-24.1-23.6ZM125.8,35.2c-1.4,2.4-3.1,4.5-5.3,6.3-2.2,1.8-4.7,3-7.5,3.8-2.7.7-5.2.9-7.6.4-2.4-.5-4.4-1.5-6.1-3.1-1.7-1.6-2.9-3.6-3.5-6-.7-2.5-.7-4.8,0-7.1s1.9-4.2,3.6-5.8c1.8-1.7,4-2.9,6.7-3.6,2.8-.8,5.6-1,8.4-.6,2.8.4,5.4,1.3,7.7,2.7,2.4,1.4,5.7,4.5,6,5.4.3.9-1.1,5.2-2.4,7.7Z"/>
+      </g>
+    </g>
+  </g>
+</svg></div>
+    <div class="doc">{{event_name}} · Conversation Analysis</div>
+  </div>
+  <div class="eyebrow">Veelgestelde onbeantwoorde vragen</div>
+  <h1>Waar lopen leden steeds op vast?</h1>
+  <div class="body" style="padding-top:16px;gap:14px">
+    <div class="g2" style="flex:1;min-height:0">
+      <div class="cluster top">
+        <div class="chead">
+          <span class="clbl">🎫 Cluster #1 · {{cluster_1_intent}}</span>
+          <span class="badge">{{cluster_1_count}}×</span>
+        </div>
+        <div class="ctext">"{{cluster_1_text}}"</div>
+      </div>
+      <div class="cluster">
+        <div class="chead">
+          <span class="clbl">⛺ Cluster #2 · {{cluster_2_intent}}</span>
+          <span class="badge">{{cluster_2_count}}×</span>
+        </div>
+        <div class="ctext">"{{cluster_2_text}}"</div>
+      </div>
+      <div class="cluster">
+        <div class="chead">
+          <span class="clbl">🎵 Cluster #3 · {{cluster_3_intent}}</span>
+          <span class="badge">{{cluster_3_count}}×</span>
+        </div>
+        <div class="ctext">"{{cluster_3_text}}"</div>
+      </div>
+      <div class="cluster">
+        <div class="chead">
+          <span class="clbl">💳 Cluster #4 · {{cluster_4_intent}}</span>
+          <span class="badge">{{cluster_4_count}}×</span>
+        </div>
+        <div class="ctext">"{{cluster_4_text}}"</div>
+      </div>
+    </div>
+    <div class="insight">
+      <strong>Key Insight</strong> · Het meest voorkomende onbeantwoorde thema is <span class="tag">{{cluster_1_intent}}</span>,
+      met {{cluster_1_count}} vergelijkbare vragen. Dit is het eerste onderwerp om de agent op bij te trainen.
+    </div>
+  </div>
+  <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>6 / 8</span></div>
+</section>
+
+<section class="slide">
+  <div class="topbar">
+    <div class="logo"><svg class="mom-logo" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 429.8 59.7">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: currentColor;
+      }
+    </style>
+  </defs>
+  
+  <g>
+    <g id="Laag_1">
+      <g>
+        <path class="cls-1" d="M204.8,11.6c-1.4,0-2.6.1-3.8.3-9.4,1.8-12.8,13.3-12.8,13.3,0,0,.2-1.2-1.3-5v-.3c-2.4-5.4-6.9-8.1-13.7-8.3-13.8.2-16.8,12.3-16.8,12.3v-10.8h-11.4v43h11.4v-22.4c0-6.8,7-12.2,13.8-12.2s6.9,2.7,6.9,9.1v25.4h11.4v-20.2c0-9.2,6.6-14.4,13.8-14.4s7,2.7,7,9.1v25.4h11.4v-25.4c0-18.7-14.5-19.2-16.1-19.2Z"/>
+        <path class="cls-1" d="M64.2,11.6c-1.4,0-2.6.1-3.8.3-9.4,1.8-12.8,13.3-12.8,13.3,0,0,.2-1.2-1.3-5v-.3c-2.4-5.4-6.9-8.1-13.7-8.3-13.8.2-16.8,12.3-16.8,12.3v-10.8H4.5v43h11.4v-22.4c0-6.8,7-12.2,13.8-12.2s6.9,2.7,6.9,9.1v25.4h11.4v-20.2c0-9.2,6.6-14.4,13.8-14.4s7,2.7,7,9.1v25.4h11.4v-25.4c0-18.7-14.5-19.2-16.1-19.2Z"/>
+        <path class="cls-1" d="M317.7,11.6c-13.5,0-16,12.4-16,12.4v-10.8h-11.4v43h11.4c0-1.4.5-12.2.5-20.8s7.2-13.8,14.2-13.8,7.8,2.3,7.8,9.1v25.4h11.4v-25.4c0-17.3-12.5-19.2-17.8-19.2Z"/>
+        <path class="cls-1" d="M270,13.1h-32.8s0,10.1,0,10.1c8.3-.5,18.8-3.7,24.4-5.5,2.1-.6,3.4-1.1,3.8-1.1h.2s0,8.6,0,8.6c-.2,0-.5-.1-.7-.2-5.2-1.1-11.3-.6-17.2,1.3-5.8,1.9-10.8,5.1-14,8.9-3.7,4.4-4.7,9.4-2.9,13.7,1.8,4.3,6.2,7.4,12.1,8.6,1.8.4,3.8.6,5.9.6s5.2-.3,7.8-.9c4.2-1,7.2-2.8,9-4.2v3.2h11.6s0-35.5,0-35.5c0-5.1-2.4-7.6-7.3-7.6ZM265.6,37.1v5.3l-.2.3c-2.1,2.1-5.2,3.9-8.7,5.1-4,1.3-8.2,1.6-11.5,1-1.5-.3-4.2-1.1-5-3-.8-1.8.6-3.9,1.6-5,2-2.4,5.5-4.6,9.4-5.9,3.9-1.3,8.2-1.6,11.5-1,.6.1,1.8.4,2.9,1h0v2.2Z"/>
+        <path class="cls-1" d="M407,29.6c-8.2-1.3-10.7-2.5-10.7-5.1s2.2-4,8.7-4,9,1.7,9.1,6.1h9.6s.4-11.3-12.3-14.3c-.1,0-.3,0-.4,0-1.8-.4-3.8-.6-6.1-.6-11.6,0-18.6,5-18.6,13.2s7.6,12.2,18.9,14c7.5,1.2,10.2,2.2,10.2,5.6s-2.9,4.3-9.3,4.3-10.5-1.2-10.5-7.4h-11.2c.1,15.1,16.6,16.2,21.7,16.2,9.9,0,20.5-3.5,20.5-13.1s-9.4-13.2-19.6-14.8Z"/>
+        <path class="cls-1" d="M362,49.6v-27h.2s13.7,0,13.7,0v-9.3h-15.2s1.3-2.7,1.3-10.5h-11.4v10.5h-5.6v9.6h5.6v25.9c0,5.1,2.4,7.5,7.2,7.5h19.9v-9.4c-9.7.2-15.3,2.6-15.4,2.6h-.3Z"/>
+        <path class="cls-1" d="M112.7,11c-13.3,0-24.1,10.5-24.1,23.6.8,7.6,3.6,13.1,7.3,16.9,1.8,1.7,3.9,3.2,6.2,4.3,11.7,5.3,27.5-.3,32.9-12,1.2-2.8,1.9-5.9,1.9-9.1,0-13-10.8-23.6-24.1-23.6ZM125.8,35.2c-1.4,2.4-3.1,4.5-5.3,6.3-2.2,1.8-4.7,3-7.5,3.8-2.7.7-5.2.9-7.6.4-2.4-.5-4.4-1.5-6.1-3.1-1.7-1.6-2.9-3.6-3.5-6-.7-2.5-.7-4.8,0-7.1s1.9-4.2,3.6-5.8c1.8-1.7,4-2.9,6.7-3.6,2.8-.8,5.6-1,8.4-.6,2.8.4,5.4,1.3,7.7,2.7,2.4,1.4,5.7,4.5,6,5.4.3.9-1.1,5.2-2.4,7.7Z"/>
+      </g>
+    </g>
+  </g>
+</svg></div>
+    <div class="doc">{{event_name}} · Conversation Analysis</div>
+  </div>
+  <div class="eyebrow">Gespreksdiepte &amp; intenties</div>
+  <h1>Waar gingen de gesprekken over?</h1>
+  <div class="body" style="flex-direction:row;gap:18px;padding-top:14px">
+    <!-- depth + response times -->
+    <div class="card" style="flex:1;min-width:0;padding:20px 24px;display:flex;flex-direction:column;gap:14px">
+      <div style="font-size:12.5px;font-weight:600;color:var(--muted)">Gespreksdiepte</div>
+      <div style="display:flex;flex-direction:column;gap:12px;flex:1">
+        <div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+            <span style="font-weight:600;font-size:14px">Shallow <span style="font-size:11px;color:var(--muted)">(≤3 beurten)</span></span>
+            <span style="font-weight:800">{{pct_depth_shallow}}%</span>
+          </div>
+          <div class="bar-track"><div class="bar-fill" style="background:#dce8d4;width:{{pct_depth_shallow}}%"></div></div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+            <span style="font-weight:600;font-size:14px">Medium <span style="font-size:11px;color:var(--muted)">(4–8 beurten)</span></span>
+            <span style="font-weight:800">{{pct_depth_medium}}%</span>
+          </div>
+          <div class="bar-track"><div class="bar-fill" style="background:#8abe6a;width:{{pct_depth_medium}}%"></div></div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+            <span style="font-weight:600;font-size:14px">Deep <span style="font-size:11px;color:var(--muted)">(9+ beurten)</span></span>
+            <span style="font-weight:800">{{pct_depth_deep}}%</span>
+          </div>
+          <div class="bar-track"><div class="bar-fill" style="background:#151515;width:{{pct_depth_deep}}%"></div></div>
+        </div>
+      </div>
+      <div style="border-top:1px solid #eee;padding-top:14px">
+        <div style="font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:12px">Responstijden</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div><div class="lbl">⚡ Mediaan</div><div style="font-size:26px;font-weight:800">{{median_response_fmt}}</div></div>
+          <div><div class="lbl">⏱ Eerste respons</div><div style="font-size:26px;font-weight:800">{{avg_first_response_fmt}}</div></div>
+          <div><div class="lbl">📈 P95 uitschieter</div><div style="font-size:26px;font-weight:800">{{p95_response_fmt}}</div></div>
+          <div><div class="lbl">🔄 Depth ratio</div><div style="font-size:26px;font-weight:800">{{avg_depth_ratio}}</div></div>
+        </div>
+      </div>
+    </div>
+    <!-- intent breakdown -->
+    <div class="card" style="flex:1;min-width:0;padding:20px 24px;display:flex;flex-direction:column">
+      <div style="font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:16px">Top intenties · % van gesprekken</div>
+      <div style="display:flex;flex-direction:column;gap:12px;flex:1">
+        {{intent_breakdown_html}}
+      </div>
+    </div>
+  </div>
+  <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>7 / 8</span></div>
+</section>
+
+<section class="slide">
+  <div class="topbar">
+    <div class="logo"><svg class="mom-logo" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 429.8 59.7">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: currentColor;
+      }
+    </style>
+  </defs>
+  
+  <g>
+    <g id="Laag_1">
+      <g>
+        <path class="cls-1" d="M204.8,11.6c-1.4,0-2.6.1-3.8.3-9.4,1.8-12.8,13.3-12.8,13.3,0,0,.2-1.2-1.3-5v-.3c-2.4-5.4-6.9-8.1-13.7-8.3-13.8.2-16.8,12.3-16.8,12.3v-10.8h-11.4v43h11.4v-22.4c0-6.8,7-12.2,13.8-12.2s6.9,2.7,6.9,9.1v25.4h11.4v-20.2c0-9.2,6.6-14.4,13.8-14.4s7,2.7,7,9.1v25.4h11.4v-25.4c0-18.7-14.5-19.2-16.1-19.2Z"/>
+        <path class="cls-1" d="M64.2,11.6c-1.4,0-2.6.1-3.8.3-9.4,1.8-12.8,13.3-12.8,13.3,0,0,.2-1.2-1.3-5v-.3c-2.4-5.4-6.9-8.1-13.7-8.3-13.8.2-16.8,12.3-16.8,12.3v-10.8H4.5v43h11.4v-22.4c0-6.8,7-12.2,13.8-12.2s6.9,2.7,6.9,9.1v25.4h11.4v-20.2c0-9.2,6.6-14.4,13.8-14.4s7,2.7,7,9.1v25.4h11.4v-25.4c0-18.7-14.5-19.2-16.1-19.2Z"/>
+        <path class="cls-1" d="M317.7,11.6c-13.5,0-16,12.4-16,12.4v-10.8h-11.4v43h11.4c0-1.4.5-12.2.5-20.8s7.2-13.8,14.2-13.8,7.8,2.3,7.8,9.1v25.4h11.4v-25.4c0-17.3-12.5-19.2-17.8-19.2Z"/>
+        <path class="cls-1" d="M270,13.1h-32.8s0,10.1,0,10.1c8.3-.5,18.8-3.7,24.4-5.5,2.1-.6,3.4-1.1,3.8-1.1h.2s0,8.6,0,8.6c-.2,0-.5-.1-.7-.2-5.2-1.1-11.3-.6-17.2,1.3-5.8,1.9-10.8,5.1-14,8.9-3.7,4.4-4.7,9.4-2.9,13.7,1.8,4.3,6.2,7.4,12.1,8.6,1.8.4,3.8.6,5.9.6s5.2-.3,7.8-.9c4.2-1,7.2-2.8,9-4.2v3.2h11.6s0-35.5,0-35.5c0-5.1-2.4-7.6-7.3-7.6ZM265.6,37.1v5.3l-.2.3c-2.1,2.1-5.2,3.9-8.7,5.1-4,1.3-8.2,1.6-11.5,1-1.5-.3-4.2-1.1-5-3-.8-1.8.6-3.9,1.6-5,2-2.4,5.5-4.6,9.4-5.9,3.9-1.3,8.2-1.6,11.5-1,.6.1,1.8.4,2.9,1h0v2.2Z"/>
+        <path class="cls-1" d="M407,29.6c-8.2-1.3-10.7-2.5-10.7-5.1s2.2-4,8.7-4,9,1.7,9.1,6.1h9.6s.4-11.3-12.3-14.3c-.1,0-.3,0-.4,0-1.8-.4-3.8-.6-6.1-.6-11.6,0-18.6,5-18.6,13.2s7.6,12.2,18.9,14c7.5,1.2,10.2,2.2,10.2,5.6s-2.9,4.3-9.3,4.3-10.5-1.2-10.5-7.4h-11.2c.1,15.1,16.6,16.2,21.7,16.2,9.9,0,20.5-3.5,20.5-13.1s-9.4-13.2-19.6-14.8Z"/>
+        <path class="cls-1" d="M362,49.6v-27h.2s13.7,0,13.7,0v-9.3h-15.2s1.3-2.7,1.3-10.5h-11.4v10.5h-5.6v9.6h5.6v25.9c0,5.1,2.4,7.5,7.2,7.5h19.9v-9.4c-9.7.2-15.3,2.6-15.4,2.6h-.3Z"/>
+        <path class="cls-1" d="M112.7,11c-13.3,0-24.1,10.5-24.1,23.6.8,7.6,3.6,13.1,7.3,16.9,1.8,1.7,3.9,3.2,6.2,4.3,11.7,5.3,27.5-.3,32.9-12,1.2-2.8,1.9-5.9,1.9-9.1,0-13-10.8-23.6-24.1-23.6ZM125.8,35.2c-1.4,2.4-3.1,4.5-5.3,6.3-2.2,1.8-4.7,3-7.5,3.8-2.7.7-5.2.9-7.6.4-2.4-.5-4.4-1.5-6.1-3.1-1.7-1.6-2.9-3.6-3.5-6-.7-2.5-.7-4.8,0-7.1s1.9-4.2,3.6-5.8c1.8-1.7,4-2.9,6.7-3.6,2.8-.8,5.6-1,8.4-.6,2.8.4,5.4,1.3,7.7,2.7,2.4,1.4,5.7,4.5,6,5.4.3.9-1.1,5.2-2.4,7.7Z"/>
+      </g>
+    </g>
+  </g>
+</svg></div>
+    <div class="doc">{{event_name}} · Conversation Analysis</div>
+  </div>
+  <div class="eyebrow">Aanbevelingen</div>
+  <h1>Concrete actiepunten</h1>
+  <div class="body" style="padding-top:14px;gap:14px">
+    <div class="g2" style="flex:1;min-height:0">
+      <div class="action top">
+        <div class="ahead">
+          <div style="width:30px;height:30px;border-radius:8px;background:#151515;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0">🎫</div>
+          <div class="atitle">Train agent op {{cluster_1_intent}} ({{cluster_1_count}} vragen)</div>
+        </div>
+        <div class="abody">{{action_cluster_body}}</div>
+      </div>
+      <div class="action">
+        <div class="ahead">
+          <div style="width:30px;height:30px;border-radius:8px;background:#f0f0ee;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0">📉</div>
+          <div class="atitle">Analyseer {{conversations_takeover}} takeover-gesprekken</div>
+        </div>
+        <div class="abody">{{action_takeover_body}}</div>
+      </div>
+      <div class="action">
+        <div class="ahead">
+          <div style="width:30px;height:30px;border-radius:8px;background:#f0f0ee;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0">🕐</div>
+          <div class="atitle">Versterk agent-capaciteit {{peak_hour_range}}</div>
+        </div>
+        <div class="abody">{{action_peak_body}}</div>
+      </div>
+      <div class="action">
+        <div class="ahead">
+          <div style="width:30px;height:30px;border-radius:8px;background:#f0f0ee;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0">📸</div>
+          <div class="atitle">Verbeter {{lowest_sentiment_channel}}-afhandeling ({{lowest_sentiment_score}}★)</div>
+        </div>
+        <div class="abody">{{action_channel_body}}</div>
+      </div>
+    </div>
+    <div class="insight">
+      <strong>Prioriteit</strong> · Focus eerst op cluster #1 ({{cluster_1_intent}}) en de takeover-analyse —
+      samen dekken die twee acties het grootste deel van de onopgeloste gesprekken af.
+    </div>
+  </div>
+  <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>8 / 8</span></div>
+</section>
+
+</html>

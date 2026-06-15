@@ -1,7 +1,6 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.config import get_settings
 from app.ml.model_registry import get_model_registry
 from app.models.conversation import Conversation, Message, SentimentAnalysis
 from app.schemas.conversation import ConversationCreate, ConversationStats
@@ -26,12 +25,52 @@ class ConversationService:
         self.db.commit()
         return self._get_conversation(conversation.id)
 
-    def list_conversations(self) -> list[Conversation]:
+    def list_conversations(self, agent_id: str | None = None) -> list[Conversation]:
         stmt = select(Conversation).options(selectinload(Conversation.messages).selectinload(Message.sentiment))
+        if agent_id:
+            stmt = stmt.where(Conversation.agent_id == agent_id)
+        stmt = stmt.order_by(Conversation.created_at.desc())
         return list(self.db.scalars(stmt).all())
 
     def get(self, conversation_id: int) -> Conversation | None:
         return self._get_conversation(conversation_id)
+
+    def delete(self, conversation_id: int) -> bool:
+        conversation = self.db.get(Conversation, conversation_id)
+        if conversation is None:
+            return False
+        self.db.delete(conversation)
+        self.db.commit()
+        return True
+
+    def delete_by_agent(self, agent_id: str) -> int:
+        stmt = select(Conversation.id).where(Conversation.agent_id == agent_id)
+        ids = list(self.db.scalars(stmt).all())
+        for conversation_id in ids:
+            conversation = self.db.get(Conversation, conversation_id)
+            if conversation is not None:
+                self.db.delete(conversation)
+        self.db.commit()
+        return len(ids)
+
+    def delete_all(self) -> int:
+        stmt = select(Conversation.id)
+        ids = list(self.db.scalars(stmt).all())
+        for conversation_id in ids:
+            conversation = self.db.get(Conversation, conversation_id)
+            if conversation is not None:
+                self.db.delete(conversation)
+        self.db.commit()
+        return len(ids)
+
+    def get_random_sample(self, count: int = 5, agent_id: str | None = None) -> list[Conversation]:
+        stmt = select(Conversation).options(
+            selectinload(Conversation.messages).selectinload(Message.sentiment)
+        )
+        if agent_id:
+            stmt = stmt.where(Conversation.agent_id == agent_id)
+        stmt = stmt.order_by(func.random()).limit(count)
+        return list(self.db.scalars(stmt).all())
 
     def add_message(self, conversation_id: int, role: str, content: str) -> Message | None:
         conversation = self._get_conversation(conversation_id)
@@ -54,8 +93,11 @@ class ConversationService:
         sentiments = [message.sentiment for message in conversation.messages if message.sentiment]
         positive = sum(1 for item in sentiments if item.label.upper() == "POSITIVE")
         negative = sum(1 for item in sentiments if item.label.upper() == "NEGATIVE")
+        neutral = sum(1 for item in sentiments if item.label.upper() == "NEUTRAL")
         scores = [item.score for item in sentiments]
-        average = sum(scores) / len(scores) if scores else None
+        stars = [item.stars for item in sentiments]
+        average_score = sum(scores) / len(scores) if scores else None
+        average_stars = sum(stars) / len(stars) if stars else None
 
         return ConversationStats(
             conversation_id=conversation.id,
@@ -63,16 +105,22 @@ class ConversationService:
             message_count=len(conversation.messages),
             positive_count=positive,
             negative_count=negative,
-            average_sentiment_score=average,
+            neutral_count=neutral,
+            average_sentiment_score=average_score,
+            average_stars=average_stars,
         )
 
     def _attach_sentiment(self, message: Message) -> None:
         result = self.models.analyze_sentiment(message.content)
         analysis = SentimentAnalysis(
             message_id=message.id,
+            stars=int(result["stars"]),
             label=str(result["label"]),
             score=float(result["score"]),
-            model_name=get_settings().sentiment_model,
+            model_name=str(result["model_name"]),
+            raw_label=str(result["raw_label"]) if result.get("raw_label") else None,
+            raw_score=float(result["raw_score"]) if result.get("raw_score") is not None else None,
+            low_confidence=bool(result.get("low_confidence", False)),
         )
         self.db.add(analysis)
 

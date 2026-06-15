@@ -6,6 +6,7 @@ from app.schemas.conversation import (
     MessageRead,
     SentimentRead,
 )
+from app.schemas.ingest import IngestCreate, IngestJobRead, IngestStartResponse
 
 __all__ = [
     "ConversationCreate",
@@ -14,4 +15,7 @@ __all__ = [
     "MessageCreate",
     "MessageRead",
     "SentimentRead",
+    "IngestCreate",
+    "IngestJobRead",
+    "IngestStartResponse",
 ]
