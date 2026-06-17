@@ -13,7 +13,7 @@ export const router = createRouter({
     { path: "/oauth/callback", name: "oauth-callback", component: OAuthCallbackPage, meta: { public: true } },
     { path: "/", name: "run", component: RunPage },
     { path: "/results", name: "results", component: ResultsPage },
-    { path: "/reports/preview", name: "report-preview", component: ReportPreviewPage },
+    { path: "/reports/preview", name: "report-preview", component: ReportPreviewPage, meta: { fullscreen: true } },
   ],
 });
 

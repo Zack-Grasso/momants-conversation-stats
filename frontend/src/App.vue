@@ -10,6 +10,9 @@ const { agentId } = useAgent();
 const { user, isAuthenticated, isAuthRequired, logout, loading: authLoading } = useAuth();
 
 const showAppShell = computed(() => {
+  if (route.meta.fullscreen) {
+    return false;
+  }
   if (authLoading.value) {
     return false;
   }
@@ -18,6 +21,8 @@ const showAppShell = computed(() => {
   }
   return isAuthenticated.value;
 });
+
+const isFullscreenRoute = computed(() => Boolean(route.meta.fullscreen));
 
 const agentLabel = computed(() => {
   const id = agentId.value.trim();
@@ -33,9 +38,18 @@ async function signOut() {
 </script>
 
 <template>
-  <main class="page" :class="{ 'page-auth': !showAppShell && !authLoading }">
-    <template v-if="authLoading">
+  <main
+    class="page"
+    :class="{
+      'page-auth': !showAppShell && !authLoading && !isFullscreenRoute,
+      'page-fullscreen': isFullscreenRoute,
+    }"
+  >
+    <template v-if="authLoading && !isFullscreenRoute">
       <p class="hint loading-hint">Loading…</p>
+    </template>
+    <template v-else-if="isFullscreenRoute">
+      <router-view />
     </template>
     <template v-else-if="showAppShell">
       <header class="hero">
@@ -136,6 +150,13 @@ async function signOut() {
 .loading-hint {
   margin-top: 2rem;
   text-align: center;
+}
+
+.page-fullscreen {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
 }
 
 .page-auth {
