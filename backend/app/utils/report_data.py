@@ -671,6 +671,149 @@ def hourly_counts_from_momants_stats(stats: dict) -> dict[int, int]:
     return dict(counts)
 
 
+NON_OFFICE_LABEL_HINTS = ("non", "buiten", "outside", "after", "avond", "nacht", "weekend", "off-hours")
+OFFICE_LABEL_HINTS = ("office", "kantoor", "during", "binnen", "werk")
+
+
+@dataclass
+class MomantsReportStats:
+    conversations_total: float | None = None
+    hours_saved: float | None = None
+    support_cost_saved: float | None = None
+    assisted_revenue: float | None = None
+    direct_revenue: float | None = None
+    pct_outside_office: float | None = None
+
+    @property
+    def total_value_creation(self) -> float | None:
+        if self.assisted_revenue is None and self.support_cost_saved is None:
+            return None
+        return (self.assisted_revenue or 0) + (self.support_cost_saved or 0)
+
+
+def _metric_total(stats: dict, key: str) -> float | None:
+    metric = stats.get(key)
+    if not isinstance(metric, dict):
+        return None
+
+    for field in ("total_current_period", "total", "current_total"):
+        parsed = _to_float(metric.get(field))
+        if parsed is not None:
+            return parsed
+
+    summary = metric.get("summary")
+    if isinstance(summary, dict):
+        parsed = _to_float(summary.get("total"))
+        if parsed is not None:
+            return parsed
+
+    data = metric.get("data")
+    if isinstance(data, list) and data:
+        total = sum(v for point in data if (v := _point_value(point)) is not None)
+        if total > 0:
+            return float(total)
+
+    return None
+
+
+def _to_float(value) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _is_non_office_label(name: str) -> bool:
+    lowered = name.lower()
+    if any(hint in lowered for hint in NON_OFFICE_LABEL_HINTS):
+        return True
+    if "non" in lowered and "office" in lowered:
+        return True
+    return False
+
+
+def _is_office_label(name: str) -> bool:
+    lowered = name.lower()
+    if _is_non_office_label(lowered):
+        return False
+    return any(hint in lowered for hint in OFFICE_LABEL_HINTS)
+
+
+def _office_hours_pct(stats: dict) -> float | None:
+    metric = stats.get("conversations_office_vs_non_office")
+    if not isinstance(metric, dict):
+        return None
+
+    data = metric.get("data")
+    if not isinstance(data, list) or not data:
+        return None
+
+    entries: list[tuple[str, float]] = []
+    for point in data:
+        if not isinstance(point, dict):
+            continue
+        name = str(point.get("name") or point.get("label") or "")
+        value = _to_float(point.get("value"))
+        if value is None:
+            value = _to_float(point.get("count"))
+        if value is None:
+            continue
+        entries.append((name, value))
+
+    if not entries:
+        return None
+
+    total = sum(value for _, value in entries)
+    if total <= 0:
+        return None
+
+    non_office = sum(value for name, value in entries if _is_non_office_label(name))
+    if non_office > 0:
+        return round(100 * non_office / total, 1)
+
+    office = sum(value for name, value in entries if _is_office_label(name))
+    if office > 0:
+        return round(100 * (total - office) / total, 1)
+
+    if len(entries) == 2:
+        return round(100 * entries[1][1] / total, 1)
+
+    return None
+
+
+def parse_momants_report_stats(stats: dict) -> MomantsReportStats:
+    return MomantsReportStats(
+        conversations_total=_metric_total(stats, "conversations"),
+        hours_saved=_metric_total(stats, "hours_saved"),
+        support_cost_saved=_metric_total(stats, "support_cost_saved"),
+        assisted_revenue=_metric_total(stats, "assisted_revenue"),
+        direct_revenue=_metric_total(stats, "direct_revenue"),
+        pct_outside_office=_office_hours_pct(stats),
+    )
+
+
+def fetch_momants_report_stats(
+    agent_id: str,
+    start_date: datetime,
+    end_date: datetime,
+) -> MomantsReportStats:
+    try:
+        client = get_momants_client()
+        stats = client.get_dashboard_stats(
+            agent_id,
+            time_unit="day",
+            start_date=start_date,
+            end_date=end_date,
+        )
+        if isinstance(stats, dict):
+            return parse_momants_report_stats(stats)
+    except Exception as exc:
+        logger.warning("Momants report stats failed for agent %s: %s", agent_id, exc)
+    return MomantsReportStats()
+
+
 def apply_momants_stats_fallback(
     agent_id: str,
     message_timestamps: list[datetime],

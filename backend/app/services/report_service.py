@@ -28,9 +28,11 @@ from app.utils.report_data import (
     build_channel_fragments,
     daily_conversation_counts,
     dominant_channel,
+    fetch_momants_report_stats,
     highest_sentiment_channel,
     hourly_conversation_averages,
     hourly_conversation_counts,
+    MomantsReportStats,
     peak_hour_range,
     peak_period_label,
 )
@@ -39,6 +41,8 @@ from app.utils.report_format import (
     DUTCH_WEEKDAYS,
     all_message_timestamps,
     format_date_range,
+    format_dutch_int,
+    format_eur,
     format_report_num,
     format_short_date,
     resolve_event_name,
@@ -125,6 +129,13 @@ TEMPLATE_VARS = [
     "avg_depth_ratio",
     "lowest_sentiment_channel",
     "lowest_sentiment_score",
+    "stats_conversations_total",
+    "stats_hours_saved",
+    "stats_support_cost_saved",
+    "stats_assisted_revenue",
+    "stats_direct_revenue",
+    "stats_total_value",
+    "stats_pct_outside_office",
 ]
 
 
@@ -349,6 +360,31 @@ class ReportService:
         depth_ratios = [item.depth_ratio for item in metrics if item.depth_ratio is not None]
         set_num("avg_depth_ratio", statistics.mean(depth_ratios) if depth_ratios else None, digits=1, required=False)
 
+        if message_timestamps:
+            momants_stats = fetch_momants_report_stats(
+                agent_id, min(message_timestamps), max(message_timestamps)
+            )
+        else:
+            momants_stats = MomantsReportStats()
+
+        stats_conv_raw = momants_stats.conversations_total or total_conversations
+        if stats_conv_raw:
+            set_var("stats_conversations_total", format_dutch_int(stats_conv_raw), required=False)
+        else:
+            variables["stats_conversations_total"] = "—"
+
+        if momants_stats.hours_saved is not None:
+            set_var("stats_hours_saved", format_dutch_int(momants_stats.hours_saved), required=False)
+        else:
+            variables["stats_hours_saved"] = "—"
+
+        set_var("stats_support_cost_saved", format_eur(momants_stats.support_cost_saved), required=False)
+        set_var("stats_assisted_revenue", format_eur(momants_stats.assisted_revenue), required=False)
+        set_var("stats_direct_revenue", format_eur(momants_stats.direct_revenue), required=False)
+        total_value = momants_stats.total_value_creation
+        set_var("stats_total_value", format_eur(total_value) if total_value is not None else None, required=False)
+        set_num("stats_pct_outside_office", momants_stats.pct_outside_office, digits=1, required=False)
+
         for key in TEMPLATE_VARS:
             variables.setdefault(key, "—")
 
@@ -361,7 +397,7 @@ class ReportService:
             "chart_slide3_inner": hourly_bars_chart_svg(hour_counts, peak_hour_int),
             "chart_slide4_inner": sentiment_arc_chart_svg(arc, avg_start, avg_end),
             "unanswered_examples_page1": _render_unanswered_examples(examples, 0, 18),
-            "unanswered_examples_page2": _render_unanswered_examples(examples, 18, 18),
+            "unanswered_examples_page2": _render_unanswered_examples_page2(examples),
             "answered_questions_grid": _render_answered_questions(
                 answered_ranked, 0, 18, compact=True, tiny=True
             ),
@@ -549,10 +585,31 @@ def _render_unanswered_examples(examples: list[str], start: int, count: int) -> 
     cells: list[str] = []
     for offset in range(count):
         idx = start + offset
-        text = _truncate(examples[idx], 100) if idx < len(examples) else "Geen voorbeeld beschikbaar"
+        if idx >= len(examples):
+            break
+        text = _truncate(examples[idx], 100)
         cells.append(
             f'<div class="q-cell"><span class="q-text">"{_escape_html(text)}"</span></div>'
         )
+    return "\n          ".join(cells)
+
+
+def _render_unanswered_examples_page2(examples: list[str], start: int = 18, count: int = 18) -> str:
+    cells: list[str] = []
+    for offset in range(count):
+        idx = start + offset
+        if idx >= len(examples):
+            break
+        text = _truncate(examples[idx], 100)
+        cells.append(
+            f'<div class="q-cell"><span class="q-text">"{_escape_html(text)}"</span></div>'
+        )
+
+    if len(examples) <= start or len(examples) < start + count:
+        cells.append(
+            '<div class="q-cell q-remainder">Alle overige vragen zijn beantwoord.</div>'
+        )
+
     return "\n          ".join(cells)
 
 
@@ -635,8 +692,6 @@ def _render_opportunity_cards(
             f'<div class="oquestion">"{question}"</div>'
             f'<div class="olbl">Huidig antwoord</div>'
             f'<div class="oanswer">{answer}</div>'
-            f'<div class="olbl">Nieuw antwoord</div>'
-            f'<div class="oblank"></div>'
             f"</div>"
         )
     return "\n      ".join(cards) if cards else ""

@@ -25,6 +25,9 @@ def test_template_contains_dynamic_chart_placeholders():
     # Intent / conversation-depth reporting has been removed.
     assert "{{intent_breakdown_html}}" not in template
     assert "Gespreksdiepte" not in template
+    assert "{{stats_conversations_total}}" in template
+    assert "{{stats_total_value}}" in template
+    assert template.count("/ 12") == 12
 def test_select_x_label_indices_drops_crowded_end_labels():
     from app.utils.report_charts import _select_x_label_indices
 

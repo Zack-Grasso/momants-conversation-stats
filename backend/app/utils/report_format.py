@@ -93,3 +93,19 @@ def format_report_num(value: float | int, digits: int) -> str:
     if "." in formatted:
         formatted = formatted.rstrip("0").rstrip(".")
     return formatted
+
+
+def format_dutch_int(value: float | int) -> str:
+    number = int(round(float(value)))
+    return f"{number:,}".replace(",", ".")
+
+
+def format_eur(value: float | int | None) -> str:
+    if value is None:
+        return "—"
+    amount = float(value)
+    if abs(amount) >= 1_000_000:
+        return f"€{format_report_num(amount / 1_000_000, 1)}m"
+    if abs(amount) >= 1_000:
+        return f"€{format_report_num(amount / 1_000, 0)}k"
+    return f"€{format_report_num(amount, 0)}"

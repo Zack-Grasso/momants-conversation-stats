@@ -12,8 +12,10 @@ from app.utils.report_data import (
     daily_conversation_counts,
     daily_counts_from_momants_stats,
     dominant_channel,
+    fetch_momants_report_stats,
     hourly_conversation_counts,
     hourly_counts_from_momants_stats,
+    parse_momants_report_stats,
     peak_hour_range,
     render_intent_breakdown_html,
 )
@@ -211,3 +213,60 @@ def test_hourly_counts_from_momants_stats_parses_heatmap_series():
 
     assert counts[18] == 5
     assert counts[9] == 2
+
+
+def test_parse_momants_report_stats():
+    stats = {
+        "conversations": {"total_current_period": 57202},
+        "hours_saved": {"total_current_period": 1240},
+        "support_cost_saved": {"total_current_period": 186000},
+        "assisted_revenue": {"total_current_period": 557000},
+        "direct_revenue": {"total_current_period": 42000},
+        "conversations_office_vs_non_office": {
+            "data": [
+                {"name": "office_hours", "value": 22880},
+                {"name": "non_office", "value": 34322},
+            ]
+        },
+    }
+
+    parsed = parse_momants_report_stats(stats)
+
+    assert parsed.conversations_total == 57202
+    assert parsed.hours_saved == 1240
+    assert parsed.support_cost_saved == 186000
+    assert parsed.assisted_revenue == 557000
+    assert parsed.direct_revenue == 42000
+    assert parsed.pct_outside_office == 60.0
+    assert parsed.total_value_creation == 743000
+
+
+def test_parse_momants_report_stats_conversations_from_summary():
+    stats = {
+        "conversations": {"summary": {"total": 1200}},
+        "conversations_office_vs_non_office": {
+            "data": [
+                {"label": "Binnen kantooruren", "count": 300},
+                {"label": "Buiten kantooruren", "count": 700},
+            ]
+        },
+    }
+
+    parsed = parse_momants_report_stats(stats)
+
+    assert parsed.conversations_total == 1200
+    assert parsed.pct_outside_office == 70.0
+
+
+def test_fetch_momants_report_stats_fallback_on_api_error():
+    start = datetime(2026, 3, 1, tzinfo=timezone.utc)
+    end = datetime(2026, 3, 31, tzinfo=timezone.utc)
+
+    with patch("app.utils.report_data.get_momants_client") as mock_get_client:
+        mock_get_client.return_value.get_dashboard_stats.side_effect = RuntimeError("API down")
+        result = fetch_momants_report_stats("agent-id", start, end)
+
+    assert result.conversations_total is None
+    assert result.hours_saved is None
+    assert result.pct_outside_office is None
+    assert result.total_value_creation is None
