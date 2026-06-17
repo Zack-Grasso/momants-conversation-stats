@@ -67,6 +67,8 @@ def test_resolve_event_name_falls_back_when_momants_lookup_fails():
 
 
 def test_sentiment_summary_resolves_dominant_mood_label():
+    from app.services.report_service import ReportService
+
     db = MagicMock()
     db.execute.return_value.all.return_value = [("positive", 3)]
     db.scalars.return_value.all.return_value = ['[{"label": "joy", "score": 0.9}]']

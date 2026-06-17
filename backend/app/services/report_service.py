@@ -401,8 +401,8 @@ class ReportService:
             "answered_questions_grid": _render_answered_questions(
                 answered_ranked, 0, 18, compact=True, tiny=True
             ),
-            "opportunity_cards_page1": _render_opportunity_cards(opportunity_examples, 0, 2),
-            "opportunity_cards_page2": _render_opportunity_cards(opportunity_examples, 2, 2),
+            "opportunity_cards_page1": _render_opportunity_cards(opportunity_examples, 0, 1),
+            "opportunity_cards_page2": _render_opportunity_cards(opportunity_examples, 1, 3),
             **channel_fragments,
         }
 
@@ -681,7 +681,7 @@ def _render_opportunity_cards(
         question = _escape_html(_truncate(item.question_text.strip(), 200))
         reply = (item.agent_reply_text or "").strip()
         if reply:
-            answer = _escape_html(_sanitize_reply_for_display(reply))
+            answer = _escape_html(_sanitize_reply_for_display(reply, max_len=1200))
         elif item.status == "no_reply":
             answer = "Geen antwoord gegeven"
         else:

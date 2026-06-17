@@ -27,7 +27,7 @@ def test_template_contains_dynamic_chart_placeholders():
     assert "Gespreksdiepte" not in template
     assert "{{stats_conversations_total}}" in template
     assert "{{stats_total_value}}" in template
-    assert template.count("/ 12") == 12
+    assert template.count("/ 11") == 11
 def test_select_x_label_indices_drops_crowded_end_labels():
     from app.utils.report_charts import _select_x_label_indices
 
