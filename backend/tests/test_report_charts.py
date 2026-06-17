@@ -71,9 +71,10 @@ def test_sentiment_arc_chart_svg_renders_grid_and_endpoints():
     svg = sentiment_arc_chart_svg([3.4, 3.8, 4.1], 3.4, 4.1)
 
     assert "1★" in svg
-    assert "3.4★" in svg
-    assert "4.1★" in svg
+    assert 'clipPath id="plot-clip-sentiment"' in svg
+    assert 'clip-path="url(#plot-clip-sentiment)"' in svg
     assert "<polyline" in svg
+    assert "bericht 1" in svg
 
 
 def test_emotion_timeline_chart_svg_renders_lines_and_legend():
@@ -83,6 +84,7 @@ def test_emotion_timeline_chart_svg_renders_lines_and_legend():
     )
     svg = emotion_timeline_chart_svg(timeline, EMOTION_LABEL_NL)
 
+    assert 'clipPath id="plot-clip-emotion"' in svg
     assert "<polyline" in svg
     assert "<circle" in svg
     assert "nieuwsgierigheid" in svg

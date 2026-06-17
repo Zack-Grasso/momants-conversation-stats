@@ -6,21 +6,36 @@ from html import escape
 from app.utils.report_format import format_short_date
 
 
-def _plot_x(index: int, count: int, plot_left: float, plot_right: float, *, inset: float = 14) -> float:
-    inner_left = plot_left + inset
-    inner_right = plot_right - inset
+def _plot_x(index: int, count: int, plot_left: float, plot_right: float) -> float:
     if count <= 1:
-        return (inner_left + inner_right) / 2
-    return inner_left + (index / (count - 1)) * (inner_right - inner_left)
+        return (plot_left + plot_right) / 2
+    return plot_left + (index / (count - 1)) * (plot_right - plot_left)
 
 
-def _x_label_x(index: int, count: int, plot_left: float, plot_right: float, *, inset: float = 14) -> float:
-    x = _plot_x(index, count, plot_left, plot_right, inset=inset)
-    if index == 0:
-        return plot_left + 4
-    if index == count - 1:
-        return plot_right - 4
-    return x
+def _plot_clip_open(
+    parts: list[str],
+    clip_id: str,
+    plot_left: float,
+    plot_right: float,
+    plot_top: float,
+    plot_bottom: float,
+) -> None:
+    width = plot_right - plot_left
+    height = plot_bottom - plot_top
+    parts.append(
+        f'<defs><clipPath id="{clip_id}">'
+        f'<rect x="{plot_left:.1f}" y="{plot_top:.1f}" width="{width:.1f}" height="{height:.1f}"/>'
+        f"</clipPath></defs>"
+    )
+    parts.append(f'<g clip-path="url(#{clip_id})">')
+
+
+def _plot_clip_close(parts: list[str]) -> None:
+    parts.append("</g>")
+
+
+def _x_label_x(index: int, count: int, plot_left: float, plot_right: float) -> float:
+    return _plot_x(index, count, plot_left, plot_right)
 
 
 def _select_x_label_indices(
@@ -136,12 +151,10 @@ def daily_volume_chart_svg(
     width: int = 800,
     height: int = 210,
 ) -> str:
-    y_label_x = 50
-    plot_left, plot_right = 64, width - 36
-    plot_top, plot_bottom = 32, 164
-    x_label_y = plot_bottom + 20
+    plot_left, plot_right = 56, width - 20
+    plot_top, plot_bottom = 24, 168
+    x_label_y = plot_bottom + 18
     plot_h = plot_bottom - plot_top
-    point_inset = 16
 
     if not daily_counts:
         return (
@@ -155,6 +168,7 @@ def daily_volume_chart_svg(
     ticks = _dedupe_ticks_by_y(_nice_ticks(max_val), max_val, plot_bottom, plot_h)
 
     parts: list[str] = []
+    y_label_x = 44
 
     for tick in ticks:
         y = plot_bottom - (tick / max_val) * plot_h
@@ -163,7 +177,7 @@ def daily_volume_chart_svg(
 
     points: list[tuple[float, float]] = []
     for index, day in enumerate(days):
-        x = _plot_x(index, len(days), plot_left, plot_right, inset=point_inset)
+        x = _plot_x(index, len(days), plot_left, plot_right)
         y = plot_bottom - (daily_counts[day] / max_val) * plot_h
         points.append((x, y))
 
@@ -171,6 +185,7 @@ def daily_volume_chart_svg(
     area_points += f" {points[-1][0]:.1f},{plot_bottom} {points[0][0]:.1f},{plot_bottom}"
     line_points = " ".join(f"{x:.1f},{y:.1f}" for x, y in points)
 
+    _plot_clip_open(parts, "plot-clip-volume", plot_left, plot_right, plot_top, plot_bottom)
     parts.append(f'<polygon fill="url(#vg)" points="{area_points}"/>')
     parts.append(
         f'<polyline fill="none" stroke="#151515" stroke-width="2.2" stroke-linejoin="round" '
@@ -181,13 +196,14 @@ def daily_volume_chart_svg(
         peak_day = max(daily_counts, key=daily_counts.get)
     peak_index = days.index(peak_day) if peak_day in days else values.index(max(values))
     peak_x, peak_y = points[peak_index]
+    parts.append(f'<circle cx="{peak_x:.1f}" cy="{peak_y:.1f}" r="5" fill="#151515"/>')
+    _plot_clip_close(parts)
+
     peak_label = escape(format_short_date(peak_day))
     badge_w = 88
     badge_h = 17
-    badge_x = _badge_rect_x(peak_x, badge_w, plot_left + 4, plot_right - 4)
-    badge_y = _clamp(peak_y - 24, plot_top + 4, plot_bottom - badge_h - 8)
-
-    parts.append(f'<circle cx="{peak_x:.1f}" cy="{peak_y:.1f}" r="5" fill="#151515"/>')
+    badge_x = _badge_rect_x(peak_x, badge_w, plot_left, plot_right)
+    badge_y = _clamp(peak_y - 22, plot_top + 2, plot_bottom - badge_h - 4)
     if badge_y >= plot_top + 2:
         parts.append(f'<rect x="{badge_x:.1f}" y="{badge_y:.1f}" width="{badge_w}" height="{badge_h}" rx="4" fill="#151515"/>')
         parts.append(
@@ -196,7 +212,7 @@ def daily_volume_chart_svg(
         )
 
     def label_x(index: int) -> float:
-        return _x_label_x(index, len(days), plot_left, plot_right, inset=point_inset)
+        return _x_label_x(index, len(days), plot_left, plot_right)
 
     for index in _select_x_label_indices(len(days), label_x, max_labels=7, min_spacing=56):
         x = label_x(index)
@@ -271,13 +287,12 @@ def sentiment_arc_chart_svg(
     width: int = 700,
     height: int = 210,
 ) -> str:
-    y_label_x = 50
-    plot_left, plot_right = 64, width - 36
-    plot_top, plot_bottom = 28, 164
-    x_label_y = plot_bottom + 20
+    y_label_x = 44
+    plot_left, plot_right = 56, width - 20
+    plot_top, plot_bottom = 16, 172
+    x_label_y = 188
     plot_h = plot_bottom - plot_top
     count = len(arc_points) or 1
-    point_inset = 16
 
     def star_y(stars: float) -> float:
         clamped = min(5.0, max(1.0, stars))
@@ -292,10 +307,11 @@ def sentiment_arc_chart_svg(
 
     coords: list[tuple[float, float]] = []
     for index, stars in enumerate(arc_points):
-        x = _plot_x(index, count, plot_left, plot_right, inset=point_inset)
+        x = _plot_x(index, count, plot_left, plot_right)
         y = star_y(stars)
         coords.append((x, y))
 
+    _plot_clip_open(parts, "plot-clip-sentiment", plot_left, plot_right, plot_top, plot_bottom)
     if coords:
         area = " ".join(f"{x:.1f},{y:.1f}" for x, y in coords)
         area += f" {coords[-1][0]:.1f},{plot_bottom} {coords[0][0]:.1f},{plot_bottom}"
@@ -307,44 +323,15 @@ def sentiment_arc_chart_svg(
         )
         for x, y in coords:
             parts.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3.5" fill="#151515"/>')
+    _plot_clip_close(parts)
 
-    start_label = f"{start_stars:.1f}★" if start_stars is not None else "—"
-    end_label = f"{end_stars:.1f}★" if end_stars is not None else "—"
-    if coords:
-        sx, sy = coords[0]
-        ex, ey = coords[-1]
-        start_badge_w = 44
-        start_badge_h = 15
-        start_badge_x = _clamp(sx + 10, plot_left + 6, plot_right - start_badge_w - 6)
-        start_badge_y = _clamp(sy - 26, plot_top + 4, plot_bottom - start_badge_h - 24)
-        parts.append(
-            f'<rect x="{start_badge_x:.1f}" y="{start_badge_y:.1f}" width="{start_badge_w}" '
-            f'height="{start_badge_h}" rx="4" fill="#f0f0ee"/>'
-        )
-        parts.append(
-            f'<text x="{start_badge_x + 6:.1f}" y="{start_badge_y + 11:.1f}" font-family="Inter" '
-            f'font-size="10" fill="#555" text-anchor="start">{escape(start_label)}</text>'
-        )
-
-        end_badge_w = 44
-        end_badge_h = 15
-        end_badge_x = _clamp(ex - end_badge_w - 10, plot_left + 6, plot_right - end_badge_w - 6)
-        end_badge_y = _clamp(ey - 26, plot_top + 4, plot_bottom - start_badge_h - 24)
-        parts.append(
-            f'<rect x="{end_badge_x:.1f}" y="{end_badge_y:.1f}" width="{end_badge_w}" '
-            f'height="{end_badge_h}" rx="4" fill="#151515"/>'
-        )
-        parts.append(
-            f'<text x="{end_badge_x + end_badge_w - 6:.1f}" y="{end_badge_y + 11:.1f}" '
-            f'font-family="Inter" font-size="10" fill="#E2F5C9" text-anchor="end" font-weight="700">'
-            f'{escape(end_label)}</text>'
-        )
-
-    def label_x(index: int) -> float:
-        return _x_label_x(index, count, plot_left, plot_right, inset=point_inset)
-
-    for index in _select_x_label_indices(count, label_x, max_labels=6, min_spacing=34):
-        x = label_x(index)
+    label_indices = [0, min(2, count - 1), min(4, count - 1), min(6, count - 1), min(8, count - 1), count - 1]
+    seen: set[int] = set()
+    for index in label_indices:
+        if index in seen or index >= count:
+            continue
+        seen.add(index)
+        x = _plot_x(index, count, plot_left, plot_right)
         label = "bericht 1" if index == 0 else ("10" if index == count - 1 else str(index + 1))
         parts.append(
             f'<text x="{x:.1f}" y="{x_label_y}" font-family="Inter" font-size="11" fill="#bbb" '
@@ -369,12 +356,11 @@ def emotion_timeline_chart_svg(
     width: int = 700,
     height: int = 230,
 ) -> str:
-    y_label_x = 50
-    plot_left, plot_right = 64, width - 36
-    plot_top, plot_bottom = 24, 148
-    x_label_y = plot_bottom + 18
+    y_label_x = 44
+    plot_left, plot_right = 56, width - 20
+    plot_top, plot_bottom = 16, 156
+    x_label_y = 172
     plot_h = plot_bottom - plot_top
-    point_inset = 16
 
     if timeline is None or not timeline.points or not timeline.emotions:
         return (
@@ -391,11 +377,12 @@ def emotion_timeline_chart_svg(
         parts.append(_y_axis_label(y_label_x, y + 4, f"{tick}%"))
 
     line_emotions = [emotion for emotion in timeline.emotions if emotion != "overig"]
+    _plot_clip_open(parts, "plot-clip-emotion", plot_left, plot_right, plot_top, plot_bottom)
     for emotion_index, emotion in enumerate(line_emotions):
         fill = EMOTION_CHART_COLORS[emotion_index % len(EMOTION_CHART_COLORS)]
         coords: list[tuple[float, float]] = []
         for index, point in enumerate(timeline.points):
-            x = _plot_x(index, count, plot_left, plot_right, inset=point_inset)
+            x = _plot_x(index, count, plot_left, plot_right)
             share_pct = point.get(emotion, 0.0) * 100
             y = plot_bottom - (share_pct / 100) * plot_h
             coords.append((x, y))
@@ -410,12 +397,15 @@ def emotion_timeline_chart_svg(
         )
         for x, y in coords:
             parts.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3" fill="{fill}"/>')
+    _plot_clip_close(parts)
 
-    def label_x(index: int) -> float:
-        return _x_label_x(index, count, plot_left, plot_right, inset=point_inset)
-
-    for index in _select_x_label_indices(count, label_x, max_labels=6, min_spacing=34):
-        x = label_x(index)
+    label_indices = [0, min(2, count - 1), min(4, count - 1), min(6, count - 1), min(8, count - 1), count - 1]
+    seen: set[int] = set()
+    for index in label_indices:
+        if index in seen or index >= count:
+            continue
+        seen.add(index)
+        x = _plot_x(index, count, plot_left, plot_right)
         label = "bericht 1" if index == 0 else ("10" if index == count - 1 else str(index + 1))
         parts.append(
             f'<text x="{x:.1f}" y="{x_label_y}" font-family="Inter" font-size="11" fill="#bbb" '
@@ -423,7 +413,7 @@ def emotion_timeline_chart_svg(
         )
 
     legend_x = plot_left
-    legend_y = plot_bottom + 38
+    legend_y = 188
     legend_row_gap = 16
     legend_item_gap = 14
     for emotion_index, emotion in enumerate(line_emotions):
