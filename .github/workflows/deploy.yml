@@ -1,0 +1,21 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    steps:
+      - name: Pull latest code
+        run: |
+          cd /Users/server/momants-conversation-stats
+          git pull origin main
+
+      - name: Rebuild containers
+        run: |
+          cd /Users/server/momants-conversation-stats
+          docker compose up -d --build
