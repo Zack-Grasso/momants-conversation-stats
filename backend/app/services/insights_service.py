@@ -443,6 +443,9 @@ class InsightsService:
                             "stars": message.sentiment.stars,
                             "label": message.sentiment.label,
                             "score": message.sentiment.score,
+                            "polarity": message.sentiment.polarity,
+                            "polarity_score": message.sentiment.polarity_score,
+                            "emotions": message.sentiment.emotions,
                         }
                         if message.sentiment
                         else None

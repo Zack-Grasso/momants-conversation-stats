@@ -68,6 +68,26 @@ function starDisplay(count) {
   return "★".repeat(filled) + "☆".repeat(5 - filled);
 }
 
+function sentimentEmoji(sentiment) {
+  const value = (sentiment?.polarity || sentiment?.label || "").toLowerCase();
+  if (value.includes("pos")) return "😊";
+  if (value.includes("neg")) return "😠";
+  return "😐";
+}
+
+function sentimentScore(sentiment) {
+  const value = sentiment?.polarity_score ?? sentiment?.score;
+  return typeof value === "number" ? value.toFixed(2) : "";
+}
+
+function sentimentEmotions(sentiment) {
+  if (!Array.isArray(sentiment?.emotions) || !sentiment.emotions.length) return "";
+  return sentiment.emotions
+    .slice(0, 3)
+    .map((item) => item.label)
+    .join(", ");
+}
+
 function trajectoryLabel(value) {
   const labels = {
     improving: "Improving ↑",
@@ -96,7 +116,7 @@ function memberMessages(conversation) {
 function handleCacheError(err) {
   if (err instanceof CacheUnavailableError) {
     cacheWarning.value =
-      "Dashboard data unavailable — waiting for pipeline refresh. Check the Run page for pipeline status.";
+      "Dashboard data is loading fresh from the database — this may take a moment on first load.";
     return true;
   }
   error.value = err.message;
@@ -476,7 +496,11 @@ onMounted(() => {
           <div v-for="message in memberMessages(conversation)" :key="message.id" class="message review-message">
             <header>
               <span v-if="message.sentiment" class="badge" :class="message.sentiment.label.toLowerCase()">
-                {{ starDisplay(message.sentiment.stars) }} {{ message.sentiment.label }}
+                {{ sentimentEmoji(message.sentiment) }} {{ message.sentiment.label }}
+                <span class="badge-score">{{ sentimentScore(message.sentiment) }}</span>
+                <span v-if="sentimentEmotions(message.sentiment)" class="badge-emotions">
+                  · {{ sentimentEmotions(message.sentiment) }}
+                </span>
               </span>
             </header>
             <p>{{ message.content }}</p>
@@ -531,7 +555,11 @@ onMounted(() => {
             <header>
               <strong>{{ message.role }}</strong>
               <span v-if="message.sentiment" class="badge" :class="message.sentiment.label.toLowerCase()">
-                {{ starDisplay(message.sentiment.stars) }} {{ message.sentiment.label }}
+                {{ sentimentEmoji(message.sentiment) }} {{ message.sentiment.label }}
+                <span class="badge-score">{{ sentimentScore(message.sentiment) }}</span>
+                <span v-if="sentimentEmotions(message.sentiment)" class="badge-emotions">
+                  · {{ sentimentEmotions(message.sentiment) }}
+                </span>
               </span>
               <span v-if="message.unanswered_status" class="badge unanswered">
                 {{ unansweredBadge(message.unanswered_status) }}

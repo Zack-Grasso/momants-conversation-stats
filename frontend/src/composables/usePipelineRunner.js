@@ -27,13 +27,16 @@ export function jobStatusClass(status) {
 export function usePipelineRunner(agentId) {
   const healthStatus = ref(null);
   const ingestJob = ref(null);
+  const sentimentJob = ref(null);
   const insightsJob = ref(null);
   const runningIngestJobs = ref([]);
+  const runningSentimentJobs = ref([]);
   const runningInsightsJobs = ref([]);
   const jobLimits = ref(null);
   const adminBusy = ref(false);
   const logs = ref([]);
   const pipelineStarting = ref(false);
+  const reanalyzing = ref(false);
   const error = ref("");
   const success = ref("");
 
@@ -60,33 +63,42 @@ export function usePipelineRunner(agentId) {
   });
 
   const ingestRunning = computed(() => runningIngestJobs.value.length > 0);
+  const sentimentRunning = computed(() => runningSentimentJobs.value.length > 0);
   const insightsRunning = computed(() => runningInsightsJobs.value.length > 0);
 
   const pipelineStage = computed(() => {
     if (ingestRunning.value) return "ingest";
+    if (sentimentRunning.value) return "sentiment";
     if (insightsRunning.value) return "insights";
-    if (ingestJob.value?.status === "complete" && insightsJob.value?.status === "complete" && !cacheReady.value) {
-      return "warming";
-    }
+    if (pipelineRun.value?.stage === "warming") return "warming";
     if (cacheReady.value) return "ready";
     return "idle";
   });
 
   const pipelineRunning = computed(
-    () => ingestRunning.value || insightsRunning.value || pipelineStage.value === "warming",
+    () =>
+      ingestRunning.value ||
+      sentimentRunning.value ||
+      insightsRunning.value ||
+      pipelineStage.value === "warming",
   );
 
   const hasLiveProgress = computed(
-    () => runningIngestJobs.value.length > 0 || runningInsightsJobs.value.length > 0 || pipelineStage.value === "warming",
+    () =>
+      runningIngestJobs.value.length > 0 ||
+      runningSentimentJobs.value.length > 0 ||
+      runningInsightsJobs.value.length > 0 ||
+      pipelineStage.value === "warming",
   );
 
   const lastUpdated = computed(() => {
-    const ingestAt = ingestJob.value?.completed_at;
-    const insightsAt = insightsJob.value?.completed_at;
-    if (!ingestAt && !insightsAt) return null;
-    if (!ingestAt) return insightsAt;
-    if (!insightsAt) return ingestAt;
-    return ingestAt > insightsAt ? ingestAt : insightsAt;
+    const candidates = [
+      ingestJob.value?.completed_at,
+      sentimentJob.value?.completed_at,
+      insightsJob.value?.completed_at,
+    ].filter(Boolean);
+    if (!candidates.length) return null;
+    return candidates.reduce((latest, at) => (at > latest ? at : latest));
   });
 
   function jobElapsed(job) {
@@ -106,6 +118,15 @@ export function usePipelineRunner(agentId) {
 
   function ingestProgress(job) {
     return jobProgressPercent(job, "ingest");
+  }
+
+  function sentimentProgress(job) {
+    return jobProgressPercent(job, "ingest");
+  }
+
+  function sentimentEta(job) {
+    void elapsedTick.value;
+    return ingestEtaSeconds(job);
   }
 
   function insightsProgress(job) {
@@ -140,8 +161,10 @@ export function usePipelineRunner(agentId) {
 
   function updateLogs() {
     const ingestJobs = runningIngestJobs.value;
+    const sentimentJobs = runningSentimentJobs.value;
     const insightsJobs = runningInsightsJobs.value;
     const latestIngest = ingestJob.value;
+    const latestSentiment = sentimentJob.value;
     const latestInsights = insightsJob.value;
 
     for (const ingest of ingestJobs) {
@@ -162,6 +185,27 @@ export function usePipelineRunner(agentId) {
       pushEvent(
         `ingest-failed-${latestIngest.id}`,
         `Ingest #${latestIngest.id} failed: ${latestIngest.error || "unknown error"}`,
+      );
+    }
+
+    for (const sentiment of sentimentJobs) {
+      pushProgress(
+        `sentiment-progress-${sentiment.id}`,
+        `Sentiment #${sentiment.id}: ${sentiment.processed} / ${sentiment.limit ?? "?"} messages`,
+      );
+    }
+
+    if (latestSentiment?.status === "complete") {
+      pushEvent(
+        `sentiment-complete-${latestSentiment.id}`,
+        `Sentiment #${latestSentiment.id} complete — ${latestSentiment.messages_analyzed ?? 0} messages analyzed`,
+      );
+    }
+
+    if (latestSentiment?.status === "failed") {
+      pushEvent(
+        `sentiment-failed-${latestSentiment.id}`,
+        `Sentiment #${latestSentiment.id} failed: ${latestSentiment.error || "unknown error"}`,
       );
     }
 
@@ -214,6 +258,7 @@ export function usePipelineRunner(agentId) {
 
     const starts = [
       ...runningIngestJobs.value.map((job) => job.created_at),
+      ...runningSentimentJobs.value.map((job) => job.created_at),
       ...runningInsightsJobs.value.map((job) => job.created_at),
     ]
       .filter(Boolean)
@@ -264,25 +309,30 @@ export function usePipelineRunner(agentId) {
     if (!id) {
       healthStatus.value = null;
       ingestJob.value = null;
+      sentimentJob.value = null;
       insightsJob.value = null;
       runningIngestJobs.value = [];
+      runningSentimentJobs.value = [];
       runningInsightsJobs.value = [];
       jobLimits.value = null;
       return;
     }
 
     try {
-      const [health, latestIngest, latestInsights, running] = await Promise.all([
+      const [health, latestIngest, latestSentiment, latestInsights, running] = await Promise.all([
         api.getHealthStatus(id),
         api.getLatestIngestJob(id),
+        api.getLatestSentimentJob(id),
         api.getLatestInsightsJob(id),
         api.getRunningJobs(id, MAX_RUNNING_JOBS),
       ]);
 
       healthStatus.value = health;
       ingestJob.value = latestIngest;
+      sentimentJob.value = latestSentiment;
       insightsJob.value = latestInsights;
       runningIngestJobs.value = running.jobs.filter((job) => job.job_type === "ingest");
+      runningSentimentJobs.value = running.jobs.filter((job) => job.job_type === "sentiment");
       runningInsightsJobs.value = running.jobs.filter((job) => job.job_type === "insights");
       jobLimits.value = {
         globalRunning: running.global_running,
@@ -290,6 +340,9 @@ export function usePipelineRunner(agentId) {
         ingestRunning: running.ingest_running,
         ingestLimit: running.ingest_limit,
         ingestSlotsLeft: running.ingest_slots_left,
+        sentimentRunning: running.sentiment_running,
+        sentimentLimit: running.sentiment_limit,
+        sentimentSlotsLeft: running.sentiment_slots_left,
         insightsRunning: running.insights_running,
         insightsLimit: running.insights_limit,
         insightsSlotsLeft: running.insights_slots_left,
@@ -354,6 +407,27 @@ export function usePipelineRunner(agentId) {
     }
   }
 
+  async function reanalyze() {
+    const id = agentId.value?.trim();
+    if (!id) return;
+
+    reanalyzing.value = true;
+    error.value = "";
+    success.value = "";
+    try {
+      const result = await api.reanalyze(id);
+      success.value = result.message;
+      trackedIngestId = null;
+      await loadStatus();
+      if (pollTimer) clearInterval(pollTimer);
+      pollTimer = setInterval(() => loadStatus(), 2000);
+    } catch (err) {
+      error.value = err.message;
+    } finally {
+      reanalyzing.value = false;
+    }
+  }
+
   watch(agentId, () => {
     trackedIngestId = null;
     seenEvents.clear();
@@ -369,8 +443,10 @@ export function usePipelineRunner(agentId) {
   return {
     healthStatus,
     ingestJob,
+    sentimentJob,
     insightsJob,
     runningIngestJobs,
+    runningSentimentJobs,
     runningInsightsJobs,
     jobLimits,
     adminBusy,
@@ -380,17 +456,21 @@ export function usePipelineRunner(agentId) {
     pipelineStage,
     hasLiveProgress,
     pipelineStarting,
+    reanalyzing,
     error,
     success,
     lastUpdated,
     pipelineElapsedSeconds,
     cacheWarm,
     ingestRunning,
+    sentimentRunning,
     insightsRunning,
     jobElapsed,
     ingestEta,
+    sentimentEta,
     insightsEta,
     ingestProgress,
+    sentimentProgress,
     insightsProgress,
     formatDuration,
     formatLogTime,
@@ -398,6 +478,7 @@ export function usePipelineRunner(agentId) {
     jobStatusClass,
     loadStatus,
     startPipeline,
+    reanalyze,
     purgeSystem,
   };
 }

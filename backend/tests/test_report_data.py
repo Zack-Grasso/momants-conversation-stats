@@ -5,8 +5,10 @@ from unittest.mock import patch
 from app.utils.report_data import (
     ActionBodyContext,
     apply_momants_stats_fallback,
+    aggregate_emotion_timeline,
     aggregate_sentiment_arc,
     build_action_bodies,
+    build_emotion_timeline_insight,
     daily_conversation_counts,
     daily_counts_from_momants_stats,
     dominant_channel,
@@ -95,6 +97,51 @@ def test_aggregate_sentiment_arc_averages_timeline_points():
     arc = aggregate_sentiment_arc(metrics, max_index=2)
 
     assert arc == [4.0, 4.0]
+
+
+def test_aggregate_emotion_timeline_tracks_dominant_emotions_by_index():
+    conversations = [
+        SimpleNamespace(
+            messages=[
+                SimpleNamespace(
+                    id=1,
+                    from_agent=False,
+                    source_created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+                    created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+                    sentiment=SimpleNamespace(emotions=[{"label": "curiosity", "score": 0.9}]),
+                ),
+                SimpleNamespace(
+                    id=2,
+                    from_agent=False,
+                    source_created_at=datetime(2026, 3, 1, 1, tzinfo=timezone.utc),
+                    created_at=datetime(2026, 3, 1, 1, tzinfo=timezone.utc),
+                    sentiment=SimpleNamespace(emotions=[{"label": "joy", "score": 0.8}]),
+                ),
+            ],
+            created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+            integration_type="chat",
+        ),
+        SimpleNamespace(
+            messages=[
+                SimpleNamespace(
+                    id=3,
+                    from_agent=False,
+                    source_created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+                    created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+                    sentiment=SimpleNamespace(emotions=[{"label": "curiosity", "score": 0.7}]),
+                )
+            ],
+            created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+            integration_type="chat",
+        ),
+    ]
+
+    timeline = aggregate_emotion_timeline(conversations, max_index=2)
+
+    assert timeline is not None
+    assert timeline.points[0]["curiosity"] == 1.0
+    assert timeline.points[1]["joy"] == 1.0
+    assert "nieuwsgierigheid" in build_emotion_timeline_insight(timeline)
 
 
 def test_render_intent_breakdown_html_includes_label_and_pct():

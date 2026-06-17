@@ -251,6 +251,9 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 .badge.neutral { background: #f1f5f9; color: #475569; }
 .badge.unanswered { background: #ffedd5; color: #9a3412; }
 
+.badge-score { font-weight: 700; opacity: 0.85; }
+.badge-emotions { font-weight: 500; opacity: 0.75; font-style: italic; }
+
 .meta {
   margin: 0.25rem 0 0;
   color: #64748b;

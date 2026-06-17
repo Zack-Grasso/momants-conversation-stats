@@ -9,6 +9,7 @@ const { agents, loading: agentsLoading, error: agentsError, loadAgents } = useAg
 const {
   healthStatus,
   runningIngestJobs,
+  runningSentimentJobs,
   runningInsightsJobs,
   jobLimits,
   adminBusy,
@@ -18,6 +19,7 @@ const {
   pipelineStage,
   hasLiveProgress,
   pipelineStarting,
+  reanalyzing,
   error,
   success,
   lastUpdated,
@@ -25,8 +27,10 @@ const {
   cacheWarm,
   jobElapsed,
   ingestEta,
+  sentimentEta,
   insightsEta,
   ingestProgress,
+  sentimentProgress,
   insightsProgress,
   formatDuration,
   formatLogTime,
@@ -34,6 +38,7 @@ const {
   jobStatusClass,
   loadStatus,
   startPipeline,
+  reanalyze,
   purgeSystem,
 } = usePipelineRunner(agentId);
 
@@ -50,6 +55,7 @@ function formatTimestamp(iso) {
 
 const stageLabels = {
   ingest: "Ingesting conversations",
+  sentiment: "Analyzing sentiment",
   insights: "Running insights",
   warming: "Warming cache",
   ready: "Ready",
@@ -78,7 +84,18 @@ onMounted(() => {
         <button type="button" :disabled="pipelineStarting || pipelineRunning || !hasAgentId" @click="startPipeline">
           {{ pipelineStarting ? "Starting…" : pipelineRunning ? "Analysis running…" : "Start analysis" }}
         </button>
+        <button
+          type="button"
+          class="secondary"
+          :disabled="reanalyzing || pipelineStarting || pipelineRunning || !hasAgentId"
+          @click="reanalyze"
+        >
+          {{ reanalyzing ? "Starting…" : "Reanalyze (sentiment + insights)" }}
+        </button>
       </div>
+      <p class="hint">
+        Reanalyze skips ingest and re-runs sentiment + insights over conversations already stored for this agent.
+      </p>
       <p v-if="agentsError" class="hint warn">Could not load agents: {{ agentsError }}</p>
       <p v-else-if="!hasAgentId" class="hint warn">Select an agent to begin.</p>
       <p v-if="success" class="success">{{ success }}</p>
@@ -122,6 +139,7 @@ onMounted(() => {
       <p v-if="jobLimits" class="hint job-count-hint">
         Total {{ jobLimits.globalRunning }} / {{ jobLimits.globalLimit }}
         · Ingest {{ jobLimits.ingestRunning }} / {{ jobLimits.ingestLimit }}
+        · Sentiment {{ jobLimits.sentimentRunning }} / {{ jobLimits.sentimentLimit }}
         · Insights {{ jobLimits.insightsRunning }} / {{ jobLimits.insightsLimit }}
         <span v-if="hasAgentId"> · This agent: {{ jobLimits.agentRunning }} running</span>
       </p>
@@ -165,6 +183,50 @@ onMounted(() => {
           </div>
         </div>
         <p v-if="ingestJob.error && ingestJob.status !== 'running'" class="error">{{ ingestJob.error }}</p>
+      </div>
+
+      <div
+        v-for="sentimentJob in runningSentimentJobs"
+        :key="`sentiment-${sentimentJob.id}`"
+        class="job-card"
+        :class="jobStatusClass(sentimentJob.status)"
+      >
+        <div class="job-card-header">
+          <strong>Sentiment #{{ sentimentJob.id }}<span v-if="sentimentJob.reanalyze"> (reanalyze)</span></strong>
+          <span class="status-pill" :class="jobStatusClass(sentimentJob.status)">{{ sentimentJob.status }}</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill sentiment" :style="{ width: `${sentimentProgress(sentimentJob)}%` }" />
+        </div>
+        <p class="job-detail">
+          Language detection → translation → polarity + emotion
+          <span v-if="sentimentJob.phase_detail"> — {{ sentimentJob.phase_detail }}</span>
+        </p>
+        <div class="job-metrics">
+          <div class="metric">
+            <span class="metric-label">Progress</span>
+            <span class="metric-value">{{ sentimentJob.processed }} / {{ sentimentJob.limit ?? "?" }}</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Elapsed</span>
+            <span class="metric-value">{{ formatDuration(jobElapsed(sentimentJob)) }}</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">ETA</span>
+            <span class="metric-value">
+              {{ sentimentEta(sentimentJob) !== null ? `~${formatDuration(sentimentEta(sentimentJob))}` : "Estimating…" }}
+            </span>
+          </div>
+          <div v-if="sentimentJob.messages_analyzed" class="metric">
+            <span class="metric-label">Analyzed</span>
+            <span class="metric-value">{{ sentimentJob.messages_analyzed }}</span>
+          </div>
+          <div v-if="sentimentJob.failed" class="metric">
+            <span class="metric-label">Failed</span>
+            <span class="metric-value">{{ sentimentJob.failed }}</span>
+          </div>
+        </div>
+        <p v-if="sentimentJob.error && sentimentJob.status !== 'running'" class="error">{{ sentimentJob.error }}</p>
       </div>
 
       <div
@@ -286,6 +348,13 @@ onMounted(() => {
   margin-top: 0.75rem;
 }
 .health-item.running { background: #ccfbf1; color: #0f766e; border-color: #99f6e4; }
+.progress-fill.sentiment { background: #8b5cf6; }
+.agent-actions button.secondary {
+  background: #ede9fe;
+  color: #5b21b6;
+  border: 1px solid #ddd6fe;
+}
+.agent-actions button.secondary:disabled { opacity: 0.6; }
 
 .log-panel h2 { margin-top: 0; }
 .activity-log {

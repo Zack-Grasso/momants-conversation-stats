@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 import statistics
 from collections import Counter, defaultdict
@@ -7,33 +8,36 @@ from datetime import datetime
 from pathlib import Path
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.config import get_settings
-from app.models.conversation import Conversation
-from app.models.insights import ConversationMetrics, QuestionCluster, UnansweredQuestion
+from app.models.conversation import Conversation, Message, SentimentAnalysis
+from app.models.insights import ConversationMetrics, UnansweredQuestion
 from app.services.insights_service import InsightsService
 from app.utils.report_charts import (
     daily_volume_chart_svg,
+    emotion_timeline_chart_svg,
     hourly_bars_chart_svg,
     sentiment_arc_chart_svg,
 )
 from app.utils.report_data import (
     CHANNEL_LABELS,
-    RecommendationContext,
-    active_channels,
+    EMOTION_LABEL_NL,
+    aggregate_emotion_timeline,
     aggregate_sentiment_arc,
     apply_momants_stats_fallback,
     build_channel_fragments,
-    build_recommendations,
+    build_emotion_timeline_insight,
     daily_conversation_counts,
     dominant_channel,
     highest_sentiment_channel,
     hourly_conversation_averages,
     hourly_conversation_counts,
     peak_hour_range,
+    peak_period_label,
 )
+from app.utils.question_utils import is_question
 from app.utils.report_format import (
     DUTCH_WEEKDAYS,
     all_message_timestamps,
@@ -45,13 +49,19 @@ from app.utils.report_format import (
 
 TEMPLATE_PATH = Path(__file__).resolve().parents[2] / "templates" / "conversation-analysis-template-v2.html"
 
+# A conversation counts as "doorverwezen" (referred to the event's customer service) when any
+# agent message contains an email address.
+EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+
 TEMPLATE_VARS = [
     "event_name",
     "conversations_total",
     "avg_sentiment_label",
+    "dominant_mood",
     "date_range",
     "messages_total",
     "pct_resolved",
+    "pct_referred",
     "avg_start_stars",
     "avg_end_stars",
     "channel_whatsapp_count",
@@ -59,7 +69,6 @@ TEMPLATE_VARS = [
     "channel_instagram_count",
     "avg_stars",
     "avg_delta_stars",
-    "pct_takeover",
     "peak_day_name",
     "peak_day_count",
     "peak_day_label",
@@ -67,6 +76,7 @@ TEMPLATE_VARS = [
     "peak_hour",
     "peak_hour_avg",
     "peak_hour_range",
+    "peak_period_label",
     "channel_whatsapp_pct",
     "channel_chat_pct",
     "channel_instagram_pct",
@@ -81,20 +91,13 @@ TEMPLATE_VARS = [
     "pct_trajectory_declining",
     "pct_trajectory_mixed",
     "total_unanswered_questions",
+    "pct_unanswered",
+    "unanswered_insight",
+    "answered_questions_insight",
+    "emotion_timeline_insight",
     "unanswered_no_reply_count",
     "unanswered_weak_answer_count",
     "unanswered_semantic_count",
-    "unanswered_example_1",
-    "unanswered_example_2",
-    "unanswered_example_3",
-    "cluster_1_count",
-    "cluster_1_text",
-    "cluster_2_count",
-    "cluster_2_text",
-    "cluster_3_count",
-    "cluster_3_text",
-    "cluster_4_count",
-    "cluster_4_text",
     "pct_depth_shallow",
     "pct_depth_medium",
     "pct_depth_deep",
@@ -102,13 +105,8 @@ TEMPLATE_VARS = [
     "avg_first_response_fmt",
     "p95_response_fmt",
     "avg_depth_ratio",
-    "conversations_takeover",
     "lowest_sentiment_channel",
     "lowest_sentiment_score",
-    "action_cluster_body",
-    "action_takeover_body",
-    "action_peak_body",
-    "action_channel_body",
 ]
 
 
@@ -122,27 +120,25 @@ class ReportService:
             self.db.scalars(
                 select(Conversation)
                 .where(Conversation.agent_id == agent_id)
-                .options(selectinload(Conversation.messages))
+                .options(selectinload(Conversation.messages).selectinload(Message.sentiment))
             ).all()
         )
         metrics = list(
             self.db.scalars(select(ConversationMetrics).where(ConversationMetrics.agent_id == agent_id)).all()
         )
         metrics_by_conversation = {item.conversation_id: item for item in metrics}
-        clusters = list(
+        unanswered_message_ids = set(
             self.db.scalars(
-                select(QuestionCluster)
-                .where(QuestionCluster.agent_id == agent_id)
-                .order_by(QuestionCluster.count.desc(), QuestionCluster.rank)
-                .limit(4)
-            ).all()
+                select(UnansweredQuestion.message_id).where(UnansweredQuestion.agent_id == agent_id)
+            )
         )
+        answered_ranked = _rank_answered_questions(conversations, unanswered_message_ids, limit=18)
         unanswered = list(
             self.db.scalars(
                 select(UnansweredQuestion)
                 .where(UnansweredQuestion.agent_id == agent_id)
                 .order_by(UnansweredQuestion.computed_at.desc())
-                .limit(50)
+                .limit(100)
             ).all()
         )
 
@@ -173,7 +169,11 @@ class ReportService:
 
         avg_stars = overview.get("average_stars")
         set_num("avg_stars", avg_stars)
-        set_var("avg_sentiment_label", _sentiment_label(avg_stars), required=False)
+
+        dominant_polarity, dominant_mood = self._sentiment_summary(agent_id)
+        sentiment_label = POLARITY_LABEL_NL.get(dominant_polarity) if dominant_polarity else None
+        set_var("avg_sentiment_label", sentiment_label or _sentiment_label(avg_stars), required=False)
+        set_var("dominant_mood", dominant_mood, required=False)
 
         message_timestamps = all_message_timestamps(conversations)
         set_var("date_range", format_date_range(message_timestamps) if message_timestamps else None)
@@ -183,11 +183,18 @@ class ReportService:
         )
         set_var("messages_total", messages_total or None)
 
-        resolved_count = sum(1 for conversation in conversations if conversation.resolved is True)
-        takeover_count = sum(1 for conversation in conversations if conversation.takeover is True)
+        referred_count = sum(
+            1
+            for conversation in conversations
+            if _conversation_referred(conversation)
+        )
+        resolved_count = sum(
+            1
+            for conversation in conversations
+            if conversation.resolved is True and not _conversation_referred(conversation)
+        )
         set_num("pct_resolved", _pct(resolved_count, total_conversations), digits=0)
-        set_num("pct_takeover", _pct(takeover_count, total_conversations), digits=0)
-        set_var("conversations_takeover", takeover_count or None)
+        set_num("pct_referred", _pct(referred_count, total_conversations), digits=0)
 
         start_stars = [item.start_stars for item in metrics if item.start_stars is not None]
         end_stars = [item.end_stars for item in metrics if item.end_stars is not None]
@@ -265,15 +272,18 @@ class ReportService:
             set_var("peak_hour", f"{peak_hour_int:02d}:00")
             set_num("peak_hour_avg", hourly_avg[peak_hour_int], digits=1)
             set_var("peak_hour_range", peak_hour_range(peak_hour_int), required=False)
+            set_var("peak_period_label", peak_period_label(peak_hour_int), required=False)
         elif hour_counts:
             peak_hour_int = max(hour_counts, key=hour_counts.get)
             set_var("peak_hour", f"{peak_hour_int:02d}:00")
             set_num("peak_hour_avg", hour_counts[peak_hour_int], digits=1)
             set_var("peak_hour_range", peak_hour_range(peak_hour_int), required=False)
+            set_var("peak_period_label", peak_period_label(peak_hour_int), required=False)
         else:
             for key in ("peak_hour", "peak_hour_avg", "peak_hour_range"):
                 missing.append(key)
                 variables[key] = "—"
+            variables["peak_period_label"] = "piek"
 
         set_num("pct_trajectory_improving", overview.get("improving_pct"), digits=0, required=False)
         set_num("pct_trajectory_declining", overview.get("worsening_pct"), digits=0, required=False)
@@ -282,30 +292,27 @@ class ReportService:
         breakdown = overview.get("unanswered_breakdown") or {}
         total_unanswered = sum(breakdown.values()) if breakdown else len(unanswered)
         set_var("total_unanswered_questions", total_unanswered, required=False)
+        set_num("pct_unanswered", overview.get("unanswered_pct"), digits=0, required=False)
         set_var("unanswered_no_reply_count", breakdown.get("no_reply", 0), required=False)
         set_var("unanswered_weak_answer_count", breakdown.get("weak_answer", 0), required=False)
         set_var("unanswered_semantic_count", breakdown.get("not_answered", 0), required=False)
 
         examples = [item.question_text.strip() for item in unanswered if item.question_text.strip()]
-        for index in range(3):
-            key = f"unanswered_example_{index + 1}"
-            if index < len(examples):
-                set_var(key, _truncate(examples[index], 120), required=False)
-            else:
-                missing.append(key)
-                variables[key] = "Geen voorbeeld beschikbaar"
-
-        for index in range(4):
-            prefix = f"cluster_{index + 1}"
-            if index < len(clusters):
-                cluster = clusters[index]
-                set_var(f"{prefix}_count", cluster.count, required=False)
-                set_var(f"{prefix}_text", _truncate(cluster.representative_text, 120), required=False)
-            else:
-                for suffix in ("count", "text"):
-                    key = f"{prefix}_{suffix}"
-                    missing.append(key)
-                    variables[key] = "—"
+        set_var(
+            "unanswered_insight",
+            _build_unanswered_insight(
+                breakdown,
+                total_unanswered,
+                overview.get("unanswered_pct"),
+                examples[0] if examples else "",
+            ),
+            required=False,
+        )
+        set_var(
+            "answered_questions_insight",
+            _build_answered_questions_insight(answered_ranked),
+            required=False,
+        )
 
         depth = overview.get("depth_distribution") or {}
         depth_total = sum(depth.values()) or 1
@@ -327,35 +334,27 @@ class ReportService:
         for key in TEMPLATE_VARS:
             variables.setdefault(key, "—")
 
-        unanswered_breakdown = overview.get("unanswered_breakdown") or {}
-        actions_html, actions_priority = build_recommendations(
-            RecommendationContext(
-                cluster_1_count=clusters[0].count if clusters else 0,
-                cluster_1_text=_truncate(clusters[0].representative_text, 120) if clusters else "",
-                no_reply=unanswered_breakdown.get("no_reply", 0),
-                weak_answer=unanswered_breakdown.get("weak_answer", 0),
-                takeover_count=takeover_count,
-                total_conversations=total_conversations,
-                peak_hour=variables["peak_hour"],
-                peak_hour_range=variables["peak_hour_range"],
-                peak_hour_avg=variables["peak_hour_avg"],
-                lowest_channel=CHANNEL_LABELS.get(lowest_channel, lowest_channel) if lowest_channel else None,
-                lowest_score=lowest_score,
-                active_channel_count=len(active_channels(dict(channel_counts))),
-                declining_pct=overview.get("worsening_pct") or 0,
-                avg_stars=avg_stars,
-            )
-        )
-        variables["actions_priority"] = actions_priority
-
         channel_fragments = build_channel_fragments(dict(channel_counts), channel_sentiments, total_conversations)
 
         arc = aggregate_sentiment_arc(metrics)
+        emotion_timeline = aggregate_emotion_timeline(conversations)
+        set_var(
+            "emotion_timeline_insight",
+            build_emotion_timeline_insight(emotion_timeline),
+            required=False,
+        )
         fragments = {
             "chart_slide2_inner": daily_volume_chart_svg(daily_counts, peak_day_dt),
             "chart_slide3_inner": hourly_bars_chart_svg(hour_counts, peak_hour_int),
             "chart_slide4_inner": sentiment_arc_chart_svg(arc, avg_start, avg_end),
-            "actions_html": actions_html,
+            "chart_emotion_timeline_inner": emotion_timeline_chart_svg(
+                emotion_timeline, EMOTION_LABEL_NL
+            ),
+            "unanswered_examples_page1": _render_unanswered_examples(examples, 0, 18),
+            "unanswered_examples_page2": _render_unanswered_examples(examples, 18, 18),
+            "answered_questions_grid": _render_answered_questions(
+                answered_ranked, 0, 18, compact=True, tiny=True
+            ),
             **channel_fragments,
         }
 
@@ -366,9 +365,60 @@ class ReportService:
             "fragments": fragments,
             "missing": sorted(set(missing)),
             "static_sections": [],
-            "charts_generated": bool(daily_counts or hour_counts or arc),
+            "charts_generated": bool(daily_counts or hour_counts or arc or emotion_timeline),
             "chart_source": chart_source,
         }
+
+    def _sentiment_summary(self, agent_id: str) -> tuple[str | None, str | None]:
+        """Return (dominant_polarity, dominant_mood_nl) across the agent's member-message sentiment.
+
+        Polarity drives the headline label (most common of positive/neutral/negative). The mood is
+        the most common top emotion, excluding the catch-all "neutral" so a meaningful feeling
+        surfaces (falls back to "neutraal" only when nothing else is present).
+        """
+        base_join = (
+            select(SentimentAnalysis.polarity, func.count())
+            .join(Message, Message.id == SentimentAnalysis.message_id)
+            .join(Conversation, Conversation.id == Message.conversation_id)
+            .where(Conversation.agent_id == agent_id, SentimentAnalysis.polarity.is_not(None))
+            .group_by(SentimentAnalysis.polarity)
+        )
+        polarity_counts = {polarity: count for polarity, count in self.db.execute(base_join).all()}
+        dominant_polarity = max(polarity_counts, key=polarity_counts.get) if polarity_counts else None
+
+        emotion_jsons = self.db.scalars(
+            select(SentimentAnalysis.emotions_json)
+            .join(Message, Message.id == SentimentAnalysis.message_id)
+            .join(Conversation, Conversation.id == Message.conversation_id)
+            .where(Conversation.agent_id == agent_id, SentimentAnalysis.emotions_json.is_not(None))
+        ).all()
+
+        mood_counter: Counter[str] = Counter()
+        neutral_count = 0
+        for raw in emotion_jsons:
+            try:
+                emotions = json.loads(raw) if raw else []
+            except (ValueError, TypeError):
+                continue
+            if not isinstance(emotions, list) or not emotions:
+                continue
+            top = str(emotions[0].get("label", "")).lower()
+            if not top:
+                continue
+            if top == "neutral":
+                neutral_count += 1
+            else:
+                mood_counter[top] += 1
+
+        if mood_counter:
+            dominant_mood_key = mood_counter.most_common(1)[0][0]
+        elif neutral_count:
+            dominant_mood_key = "neutral"
+        else:
+            dominant_mood_key = None
+        dominant_mood = EMOTION_LABEL_NL.get(dominant_mood_key, dominant_mood_key) if dominant_mood_key else None
+
+        return dominant_polarity, dominant_mood
 
     def render_html(self, agent_id: str, event_name: str | None = None) -> str:
         context = self.build_context(agent_id, event_name)
@@ -439,6 +489,11 @@ def _sentiment_label(stars: float | None) -> str:
     return "negatief"
 
 
+# Dominant polarity -> Dutch sentiment word for the headline (more robust than the avg-stars
+# threshold, which clusters around 3.0 and flips to "negatief" on the slightest skew).
+POLARITY_LABEL_NL = {"positive": "positief", "neutral": "neutraal", "negative": "negatief"}
+
+
 def _channel_sentiments(
     conversations: list[Conversation],
     metrics_by_conversation: dict[int, ConversationMetrics],
@@ -469,6 +524,142 @@ def _format_duration(seconds: float | None) -> str:
         return f"{minutes:.1f}m" if minutes < 10 else f"{minutes:.0f}m"
     hours = seconds / 3600
     return f"{hours:.1f}u" if hours < 10 else f"{hours:.0f}u"
+
+
+def _conversation_referred(conversation: Conversation) -> bool:
+    return any(
+        message.from_agent and EMAIL_RE.search(message.content or "")
+        for message in conversation.messages
+    )
+
+
+def _render_unanswered_examples(examples: list[str], start: int, count: int) -> str:
+    cells: list[str] = []
+    for offset in range(count):
+        idx = start + offset
+        text = _truncate(examples[idx], 100) if idx < len(examples) else "Geen voorbeeld beschikbaar"
+        cells.append(
+            f'<div class="q-cell"><span class="q-text">"{_escape_html(text)}"</span></div>'
+        )
+    return "\n          ".join(cells)
+
+
+def _build_unanswered_insight(
+    breakdown: dict[str, int],
+    total_unanswered: int,
+    unanswered_pct: float | None,
+    top_example: str,
+) -> str:
+    if total_unanswered <= 0:
+        return "Geen onbeantwoorde vragen in deze periode — de agent beantwoordt alles wat leden werd."
+
+    weak = breakdown.get("weak_answer", 0)
+    no_reply = breakdown.get("no_reply", 0)
+    semantic = breakdown.get("not_answered", 0)
+    breakdown_total = weak + no_reply + semantic or total_unanswered
+
+    categories = [
+        (weak, "onvoldoende respons", "Verrijk de kennisbank zodat de agent de vraag volledig afdekt."),
+        (no_reply, "geen reactie", "Zet vaste flows of escalatie op zodat geen enkele vraag onbeantwoord blijft."),
+        (semantic, "antwoord miste de kern", "Train de agent om de kern van de vraag te herkennen en direct te beantwoorden."),
+    ]
+    dominant_count, label, advice = max(categories, key=lambda item: item[0])
+    dominant_pct = round(100 * dominant_count / breakdown_total) if breakdown_total else 0
+    pct_label = format_report_num(unanswered_pct, 0) if unanswered_pct is not None else "—"
+
+    parts = [
+        f"{dominant_count} van {total_unanswered} onbeantwoorde vragen ({dominant_pct}%) hadden een {label}",
+        f"— dat is {pct_label}% van alle member-vragen.",
+        advice,
+    ]
+    if top_example.strip():
+        parts.append(f'Voorbeeld: "{_truncate(top_example, 90)}".')
+    return " ".join(parts)
+
+
+def _normalize_question_key(text: str) -> str:
+    stripped = re.sub(r"[^\w\s]", "", text.lower(), flags=re.UNICODE)
+    return " ".join(stripped.split())
+
+
+def _rank_answered_questions(
+    conversations: list[Conversation],
+    unanswered_message_ids: set[int],
+    *,
+    limit: int = 18,
+) -> list[tuple[str, int]]:
+    groups: dict[str, list[str]] = defaultdict(list)
+    for conversation in conversations:
+        for message in conversation.messages:
+            if message.from_agent or message.id in unanswered_message_ids:
+                continue
+            if not is_question(message.content):
+                continue
+            key = _normalize_question_key(message.content)
+            if not key:
+                continue
+            groups[key].append(" ".join(message.content.split()))
+
+    ranked: list[tuple[str, int]] = []
+    for texts in groups.values():
+        rep = min(texts, key=len)
+        ranked.append((rep, len(texts)))
+    ranked.sort(key=lambda item: (-item[1], item[0]))
+    return ranked[:limit]
+
+
+def _render_answered_questions(
+    ranked: list[tuple[str, int]],
+    start: int = 0,
+    count: int = 18,
+    *,
+    compact: bool = False,
+    tiny: bool = False,
+) -> str:
+    cells: list[str] = []
+    cluster_class = "cluster"
+    if compact:
+        cluster_class += " compact"
+    if tiny:
+        cluster_class += " tiny"
+    max_text = 70 if tiny else 100
+    for offset in range(count):
+        index = start + offset
+        if index < len(ranked):
+            text, freq = ranked[index]
+            top_class = " top" if index == 0 else ""
+            cells.append(
+                f'<div class="{cluster_class}{top_class}">'
+                f'<div class="chead">'
+                f'<span class="clbl"><i data-lucide="message-circle-question" class="ic"></i> '
+                f"Vraag #{index + 1}</span>"
+                f'<span class="badge">{freq}×</span>'
+                f"</div>"
+                f'<div class="ctext">"{_escape_html(_truncate(text, max_text))}"</div>'
+                f"</div>"
+            )
+        else:
+            cells.append(
+                f'<div class="{cluster_class}">'
+                '<div class="chead"><span class="clbl">—</span></div>'
+                '<div class="ctext">Geen voorbeeld beschikbaar</div>'
+                "</div>"
+            )
+    return "\n        ".join(cells)
+
+
+def _build_answered_questions_insight(ranked: list[tuple[str, int]]) -> str:
+    if not ranked:
+        return "Geen terugkerende vragen met een bevestigd antwoord in deze periode."
+
+    top_text, top_count = ranked[0]
+    total_occurrences = sum(count for _, count in ranked)
+    unique_count = len(ranked)
+    return (
+        f"De meest gestelde vraag (“{_truncate(top_text, 80)}”) kwam {top_count}× voor "
+        f"en werd door de agent beantwoord. In totaal {unique_count} unieke vragen "
+        f"({total_occurrences}×) werden goed afgehandeld — sterke kandidaten voor FAQ en agent-training."
+    )
 
 
 def _truncate(value: str, max_len: int) -> str:

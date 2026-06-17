@@ -6,7 +6,8 @@ from app.config import get_settings
 from app.database import SessionLocal
 from app.models.ingestion_job import IngestionJob
 from app.models.insights import InsightsJob
-from app.services.cache_warmer import is_agent_cache_ready
+from app.models.sentiment_job import SentimentJob
+from app.services.cache_warmer import is_agent_cache_ready, trigger_background_warm_if_needed
 
 router = APIRouter()
 
@@ -78,21 +79,31 @@ def system_status(response: Response, agent_id: str | None = Query(default=None)
     db = SessionLocal()
     try:
         running_ingest_stmt = select(func.count()).select_from(IngestionJob).where(IngestionJob.status == "running")
+        running_sentiment_stmt = select(func.count()).select_from(SentimentJob).where(SentimentJob.status == "running")
         running_insights_stmt = select(func.count()).select_from(InsightsJob).where(InsightsJob.status == "running")
         if agent_id:
             running_ingest_stmt = running_ingest_stmt.where(IngestionJob.agent_id == agent_id)
+            running_sentiment_stmt = running_sentiment_stmt.where(SentimentJob.agent_id == agent_id)
             running_insights_stmt = running_insights_stmt.where(InsightsJob.agent_id == agent_id)
 
         running_ingest = db.scalar(running_ingest_stmt)
+        running_sentiment = db.scalar(running_sentiment_stmt)
         running_insights = db.scalar(running_insights_stmt)
 
         latest_ingest_stmt = select(IngestionJob).order_by(IngestionJob.created_at.desc()).limit(1)
+        latest_sentiment_stmt = select(SentimentJob).order_by(SentimentJob.created_at.desc()).limit(1)
         latest_insights_stmt = select(InsightsJob).order_by(InsightsJob.created_at.desc()).limit(1)
         if agent_id:
             latest_ingest_stmt = (
                 select(IngestionJob)
                 .where(IngestionJob.agent_id == agent_id)
                 .order_by(IngestionJob.created_at.desc())
+                .limit(1)
+            )
+            latest_sentiment_stmt = (
+                select(SentimentJob)
+                .where(SentimentJob.agent_id == agent_id)
+                .order_by(SentimentJob.created_at.desc())
                 .limit(1)
             )
             latest_insights_stmt = (
@@ -103,6 +114,7 @@ def system_status(response: Response, agent_id: str | None = Query(default=None)
             )
 
         latest_ingest = db.scalar(latest_ingest_stmt)
+        latest_sentiment = db.scalar(latest_sentiment_stmt)
         latest_insights = db.scalar(latest_insights_stmt)
     finally:
         db.close()
@@ -110,6 +122,8 @@ def system_status(response: Response, agent_id: str | None = Query(default=None)
     database = _check_database()
     redis = _check_redis()
     cache_ready = is_agent_cache_ready(agent_id) if agent_id else None
+    if agent_id and cache_ready is False:
+        trigger_background_warm_if_needed(agent_id)
     heartbeat = _scheduler_heartbeat(agent_id) if agent_id else None
 
     overall = "ok" if database == "ok" and redis == "ok" else "degraded"
@@ -129,16 +143,18 @@ def system_status(response: Response, agent_id: str | None = Query(default=None)
         },
         "queue": {
             "running_ingest_jobs": running_ingest or 0,
+            "running_sentiment_jobs": running_sentiment or 0,
             "running_insights_jobs": running_insights or 0,
         },
         "latest_jobs": {
             "ingest": _job_summary(latest_ingest),
+            "sentiment": _job_summary(latest_sentiment),
             "insights": _job_summary(latest_insights),
         },
     }
 
 
-def _job_summary(job: IngestionJob | InsightsJob | None) -> dict | None:
+def _job_summary(job: IngestionJob | InsightsJob | SentimentJob | None) -> dict | None:
     if job is None:
         return None
     return {
@@ -157,13 +173,16 @@ def _job_summary(job: IngestionJob | InsightsJob | None) -> dict | None:
 def active_jobs(agent_id: str | None = Query(default=None)) -> dict:
     from app.services.ingestion_service import IngestionService
     from app.services.insights_service import InsightsService
+    from app.services.sentiment_service import SentimentService
 
     db = SessionLocal()
     try:
         ingest = IngestionService(db).list_running_jobs(agent_id)
+        sentiment = SentimentService(db).list_running_jobs(agent_id)
         insights = InsightsService(db).list_running_jobs(agent_id)
         return {
             "ingest": [_job_summary(job) for job in ingest],
+            "sentiment": [_job_summary(job) for job in sentiment],
             "insights": [_job_summary(job) for job in insights],
         }
     finally:

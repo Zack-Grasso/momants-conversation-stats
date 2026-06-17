@@ -17,6 +17,9 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -48,7 +51,6 @@ services:
       GOTENBERG_URL: http://gotenberg:3000
       PRELOAD_MODELS: "false"
       HF_HOME: /app/.cache/huggingface
-      TRANSFORMERS_CACHE: /app/.cache/huggingface/hub
     ports:
       - "8000:8000"
     volumes:
@@ -103,4 +105,5 @@ services:
 
 volumes:
   postgres_data:
+  redis_data:
   hf_cache:

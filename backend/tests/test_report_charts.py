@@ -3,9 +3,11 @@ from pathlib import Path
 
 from app.utils.report_charts import (
     daily_volume_chart_svg,
+    emotion_timeline_chart_svg,
     hourly_bars_chart_svg,
     sentiment_arc_chart_svg,
 )
+from app.utils.report_data import EmotionTimeline, EMOTION_LABEL_NL
 
 TEMPLATE_PATH = Path(__file__).resolve().parents[1] / "templates" / "conversation-analysis-template-v2.html"
 
@@ -16,8 +18,7 @@ def test_template_contains_dynamic_chart_placeholders():
     assert "{{chart_slide2_inner}}" in template
     assert "{{chart_slide3_inner}}" in template
     assert "{{chart_slide4_inner}}" in template
-    # Recommendations are generated dynamically as one fragment.
-    assert "{{actions_html}}" in template
+    assert "{{chart_emotion_timeline_inner}}" in template
     assert "WhatsApp is het dominante kanaal" not in template
     # Channels are rendered conditionally via fragments (Instagram hidden when empty).
     assert "{{channel_pills}}" in template
@@ -59,3 +60,22 @@ def test_sentiment_arc_chart_svg_renders_grid_and_endpoints():
     assert "3.4★" in svg
     assert "4.1★" in svg
     assert "<polyline" in svg
+
+
+def test_emotion_timeline_chart_svg_renders_lines_and_legend():
+    timeline = EmotionTimeline(
+        emotions=("curiosity", "joy"),
+        points=({"curiosity": 0.7, "joy": 0.3}, {"curiosity": 0.2, "joy": 0.8}),
+    )
+    svg = emotion_timeline_chart_svg(timeline, EMOTION_LABEL_NL)
+
+    assert "<polyline" in svg
+    assert "<circle" in svg
+    assert "nieuwsgierigheid" in svg
+    assert "vreugde" in svg
+
+
+def test_emotion_timeline_chart_svg_empty_state():
+    svg = emotion_timeline_chart_svg(None, EMOTION_LABEL_NL)
+
+    assert "Geen emotiedata" in svg

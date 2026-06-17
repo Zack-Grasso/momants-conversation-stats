@@ -20,6 +20,8 @@ SLACK_API_BASE = "https://slack.com/api"
 MILESTONE_STARTED = "started"
 MILESTONE_INGEST_STARTED = "ingest_started"
 MILESTONE_INGEST_DONE = "ingest_done"
+MILESTONE_SENTIMENT_STARTED = "sentiment_started"
+MILESTONE_SENTIMENT_DONE = "sentiment_done"
 MILESTONE_INSIGHTS_STARTED = "insights_started"
 MILESTONE_INSIGHTS_DONE = "insights_done"
 MILESTONE_PDF_READY = "pdf_ready"
@@ -95,6 +97,10 @@ def _format_message(
         return f":hourglass_flowing_sand: *Ingest started* for *{label}*."
     if milestone == MILESTONE_INGEST_DONE:
         return f":inbox_tray: *Ingest completed* for *{label}*."
+    if milestone == MILESTONE_SENTIMENT_STARTED:
+        return f":speech_balloon: *Sentiment analysis started* for *{label}*."
+    if milestone == MILESTONE_SENTIMENT_DONE:
+        return f":speech_balloon: *Sentiment analysis completed* for *{label}*."
     if milestone == MILESTONE_INSIGHTS_STARTED:
         return f":mag: *Insights started* for *{label}*."
     if milestone == MILESTONE_INSIGHTS_DONE:

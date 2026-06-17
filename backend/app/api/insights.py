@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.cache_read import require_cached_model, require_cached_model_list
+from app.api.cache_read import get_or_compute_model, get_or_compute_model_list
 from app.cache import insights_cache_key
 from app.database import get_db
 from app.schemas.insights import (
@@ -12,6 +12,7 @@ from app.schemas.insights import (
     UnansweredQuestionRead,
 )
 from app.services.agent_service import AgentService
+from app.services.cache_builders import build_overview, build_questions, build_unanswered
 from app.services.insights_service import InsightsService
 
 router = APIRouter()
@@ -59,21 +60,31 @@ def delete_insights_for_agent(
 
 
 @router.get("/overview", response_model=InsightsOverview)
-def get_overview(agent_id: str = Query(...)) -> InsightsOverview:
-    return require_cached_model(insights_cache_key(agent_id, "overview"), InsightsOverview)
+def get_overview(agent_id: str = Query(...), db: Session = Depends(get_db)) -> InsightsOverview:
+    return get_or_compute_model(
+        insights_cache_key(agent_id, "overview"),
+        InsightsOverview,
+        lambda: build_overview(db, agent_id),
+    )
 
 
 @router.get("/questions", response_model=list[QuestionClusterRead])
-def get_questions(agent_id: str = Query(...)) -> list[QuestionClusterRead]:
-    return require_cached_model_list(insights_cache_key(agent_id, "questions"), QuestionClusterRead)
+def get_questions(agent_id: str = Query(...), db: Session = Depends(get_db)) -> list[QuestionClusterRead]:
+    return get_or_compute_model_list(
+        insights_cache_key(agent_id, "questions"),
+        QuestionClusterRead,
+        lambda: build_questions(db, agent_id),
+    )
 
 
 @router.get("/unanswered", response_model=list[UnansweredQuestionRead])
 def get_unanswered(
     agent_id: str = Query(...),
     limit: int = Query(default=50, ge=1, le=200),
+    db: Session = Depends(get_db),
 ) -> list[UnansweredQuestionRead]:
-    return require_cached_model_list(
+    return get_or_compute_model_list(
         insights_cache_key(agent_id, f"unanswered:{limit}"),
         UnansweredQuestionRead,
+        lambda: build_unanswered(db, agent_id, limit=limit),
     )

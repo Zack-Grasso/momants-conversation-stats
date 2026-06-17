@@ -77,7 +77,7 @@ def build_channel_fragments(
         value = format_report_num(score, 1) if score is not None else "—"
         cols.append(
             '<div style="text-align:center">'
-            f'<div style="font-size:22px;font-weight:800">{value} ★</div>'
+            f'<div style="font-size:22px;font-weight:800">{value} / 5</div>'
             f'<div style="font-size:12px;color:var(--muted);margin-top:3px">{cfg["label"]}</div>'
             '</div>'
         )
@@ -339,6 +339,143 @@ def aggregate_sentiment_arc(metrics: list[MetricsLike], max_index: int = 10) -> 
     return arc
 
 
+# go_emotions (28 labels) -> Dutch for report copy and chart legends.
+EMOTION_LABEL_NL = {
+    "admiration": "bewondering",
+    "amusement": "vermaak",
+    "anger": "boosheid",
+    "annoyance": "ergernis",
+    "approval": "instemming",
+    "caring": "zorgzaamheid",
+    "confusion": "verwarring",
+    "curiosity": "nieuwsgierigheid",
+    "desire": "verlangen",
+    "disappointment": "teleurstelling",
+    "disapproval": "afkeuring",
+    "disgust": "afkeer",
+    "embarrassment": "schaamte",
+    "excitement": "enthousiasme",
+    "fear": "angst",
+    "gratitude": "dankbaarheid",
+    "grief": "verdriet",
+    "joy": "vreugde",
+    "love": "liefde",
+    "nervousness": "nervositeit",
+    "optimism": "optimisme",
+    "pride": "trots",
+    "realization": "besef",
+    "relief": "opluchting",
+    "remorse": "spijt",
+    "sadness": "verdriet",
+    "surprise": "verrassing",
+    "neutral": "neutraal",
+    "overig": "overig",
+}
+
+
+@dataclass(frozen=True)
+class EmotionTimeline:
+    """Dominant-emotion shares per member-message index across conversations."""
+
+    emotions: tuple[str, ...]
+    points: tuple[dict[str, float], ...]
+
+
+def _ordered_member_messages(conversation: ConversationLike) -> list:
+    messages = sorted(
+        conversation.messages,
+        key=lambda message: (getattr(message, "source_created_at", None) or message.created_at, message.id),
+    )
+    return [message for message in messages if not getattr(message, "from_agent", False)]
+
+
+def _message_top_emotion(message) -> str:
+    sentiment = getattr(message, "sentiment", None)
+    if sentiment is None:
+        return "neutral"
+    emotions = sentiment.emotions if hasattr(sentiment, "emotions") else []
+    if not emotions:
+        return "neutral"
+    return str(emotions[0].get("label", "neutral")).lower()
+
+
+def aggregate_emotion_timeline(
+    conversations: list[ConversationLike],
+    *,
+    max_index: int = 10,
+    top_n: int = 5,
+) -> EmotionTimeline | None:
+    index_counts: dict[int, Counter[str]] = defaultdict(Counter)
+    for conversation in conversations:
+        for index, message in enumerate(_ordered_member_messages(conversation)[:max_index]):
+            index_counts[index][_message_top_emotion(message)] += 1
+
+    if not any(index_counts.values()):
+        return None
+
+    global_counter: Counter[str] = Counter()
+    for counter in index_counts.values():
+        global_counter.update(counter)
+
+    top_emotions = [
+        label
+        for label, _ in global_counter.most_common(top_n + 5)
+        if label not in {"neutral", "overig"}
+    ][:top_n]
+    if not top_emotions:
+        top_emotions = ["neutral"]
+
+    points: list[dict[str, float]] = []
+    for index in range(max_index):
+        counter = index_counts.get(index, Counter())
+        total = sum(counter.values())
+        if total == 0:
+            points.append(dict(points[-1]) if points else {emotion: 0.0 for emotion in top_emotions})
+            continue
+
+        row: dict[str, float] = {}
+        tracked = 0.0
+        for emotion in top_emotions:
+            share = counter.get(emotion, 0) / total
+            row[emotion] = round(share, 3)
+            tracked += share
+        other = max(0.0, 1.0 - tracked)
+        if other >= 0.01:
+            row["overig"] = round(other, 3)
+        points.append(row)
+
+    emotion_keys: list[str] = list(top_emotions)
+    if any(point.get("overig", 0) > 0 for point in points):
+        emotion_keys.append("overig")
+
+    return EmotionTimeline(emotions=tuple(emotion_keys), points=tuple(points))
+
+
+def build_emotion_timeline_insight(timeline: EmotionTimeline | None) -> str:
+    if timeline is None or not timeline.points:
+        return "Geen emotiedata beschikbaar in deze periode."
+
+    def dominant_at(point: dict[str, float]) -> str:
+        if not point:
+            return "neutral"
+        return max(point, key=point.get)
+
+    start_key = dominant_at(timeline.points[0])
+    end_key = dominant_at(timeline.points[-1])
+    start_label = EMOTION_LABEL_NL.get(start_key, start_key)
+    end_label = EMOTION_LABEL_NL.get(end_key, end_key)
+
+    if start_key == end_key:
+        return (
+            f"{start_label.capitalize()} is de dominante emotie door het gesprek heen "
+            f"(bericht #1 → #{len(timeline.points)})."
+        )
+    return (
+        f"Leden starten vaak met {start_label}; tegen bericht #{len(timeline.points)} "
+        f"verschuift dat naar {end_label}."
+    )
+
+
 def intent_label(slug: str) -> str:
     nl = INTENT_DESCRIPTIONS.get("nl", {})
     if slug in nl:
@@ -384,6 +521,17 @@ def render_intent_breakdown_html(intent_breakdown: dict[str, int], limit: int = 
 def peak_hour_range(peak_hour: int) -> str:
     end_hour = (peak_hour + 1) % 24
     return f"{peak_hour:02d}:00–{end_hour:02d}:00"
+
+
+def peak_period_label(peak_hour: int) -> str:
+    """Dutch label for the time-of-day bucket the peak hour falls in."""
+    if 6 <= peak_hour <= 11:
+        return "ochtendpiek"
+    if 12 <= peak_hour <= 17:
+        return "middagpiek"
+    if 18 <= peak_hour <= 23:
+        return "avondpiek"
+    return "nachtpiek"
 
 
 def dominant_channel(channel_counts: dict[str, int]) -> str | None:

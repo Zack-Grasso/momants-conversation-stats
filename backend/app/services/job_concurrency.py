@@ -14,10 +14,11 @@ from app.config import get_settings
 from app.locks import job_admission_lock
 from app.models.ingestion_job import IngestionJob
 from app.models.insights import InsightsJob
+from app.models.sentiment_job import SentimentJob
 
 logger = logging.getLogger(__name__)
 
-JobKind = Literal["ingest", "insights"]
+JobKind = Literal["ingest", "insights", "sentiment"]
 
 T = TypeVar("T")
 
@@ -40,15 +41,27 @@ def count_running_insights_jobs(db: Session, agent_id: str | None = None) -> int
     return db.scalar(stmt) or 0
 
 
+def count_running_sentiment_jobs(db: Session, agent_id: str | None = None) -> int:
+    stmt = select(func.count()).select_from(SentimentJob).where(SentimentJob.status == "running")
+    if agent_id:
+        stmt = stmt.where(SentimentJob.agent_id == agent_id)
+    return db.scalar(stmt) or 0
+
+
 def count_running_jobs(db: Session, agent_id: str | None = None) -> int:
-    return count_running_ingest_jobs(db, agent_id) + count_running_insights_jobs(db, agent_id)
+    return (
+        count_running_ingest_jobs(db, agent_id)
+        + count_running_insights_jobs(db, agent_id)
+        + count_running_sentiment_jobs(db, agent_id)
+    )
 
 
 def can_start_job(db: Session, job_kind: JobKind, agent_id: str | None = None) -> bool:
     settings = get_settings()
     ingest_running = count_running_ingest_jobs(db)
     insights_running = count_running_insights_jobs(db)
-    total_running = ingest_running + insights_running
+    sentiment_running = count_running_sentiment_jobs(db)
+    total_running = ingest_running + insights_running + sentiment_running
 
     if total_running >= settings.max_concurrent_jobs:
         return False
@@ -57,6 +70,12 @@ def can_start_job(db: Session, job_kind: JobKind, agent_id: str | None = None) -
             return False
         # Per-agent fairness: one agent must not monopolise all global ingest slots.
         if agent_id and count_running_ingest_jobs(db, agent_id) >= settings.max_concurrent_ingest_per_agent:
+            return False
+        return True
+    if job_kind == "sentiment":
+        if sentiment_running >= settings.max_concurrent_sentiment:
+            return False
+        if agent_id and count_running_sentiment_jobs(db, agent_id) >= settings.max_concurrent_sentiment_per_agent:
             return False
         return True
     if insights_running >= settings.max_concurrent_insights:
@@ -147,7 +166,7 @@ def fail_orphaned_jobs(db: Session, agent_id: str, *, error: str = "Orphaned by 
     """
     now = datetime.now(timezone.utc)
     cleared = 0
-    for model in (IngestionJob, InsightsJob):
+    for model in (IngestionJob, InsightsJob, SentimentJob):
         rows = db.scalars(
             select(model).where(model.agent_id == agent_id, model.status == "running")
         ).all()
@@ -165,7 +184,10 @@ def concurrency_snapshot(db: Session, agent_id: str | None = None) -> dict[str, 
     settings = get_settings()
     ingest_running = count_running_ingest_jobs(db, agent_id)
     insights_running = count_running_insights_jobs(db, agent_id)
-    total_running = ingest_running + insights_running if agent_id else count_running_jobs(db)
+    sentiment_running = count_running_sentiment_jobs(db, agent_id)
+    total_running = (
+        ingest_running + insights_running + sentiment_running if agent_id else count_running_jobs(db)
+    )
     return {
         "global_running": count_running_jobs(db),
         "global_limit": settings.max_concurrent_jobs,
@@ -179,6 +201,12 @@ def concurrency_snapshot(db: Session, agent_id: str | None = None) -> dict[str, 
         "insights_limit": settings.max_concurrent_insights,
         "insights_slots_left": min(
             settings.max_concurrent_insights - count_running_insights_jobs(db),
+            settings.max_concurrent_jobs - count_running_jobs(db),
+        ),
+        "sentiment_running": count_running_sentiment_jobs(db),
+        "sentiment_limit": settings.max_concurrent_sentiment,
+        "sentiment_slots_left": min(
+            settings.max_concurrent_sentiment - count_running_sentiment_jobs(db),
             settings.max_concurrent_jobs - count_running_jobs(db),
         ),
         "agent_running": total_running,

@@ -21,6 +21,8 @@ from app.integrations.slack_client import (
     MILESTONE_INSIGHTS_DONE,
     MILESTONE_INSIGHTS_STARTED,
     MILESTONE_PDF_READY,
+    MILESTONE_SENTIMENT_DONE,
+    MILESTONE_SENTIMENT_STARTED,
     notify_milestone,
 )
 from app.locks import acquire_agent_job_lock, release_agent_job_lock
@@ -29,6 +31,7 @@ from app.services.cache_warmer import warm_agent_cache
 from app.services.ingestion_service import IngestionService
 from app.services.insights_service import InsightsService
 from app.services.job_concurrency import fail_orphaned_jobs
+from app.services.sentiment_service import SentimentService
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +96,31 @@ def run_insights(
 
     _run_with_retries(f"insights job {job.id}", _execute)
     return job.id
+
+
+def run_sentiment(
+    db: Session,
+    agent_id: str,
+    *,
+    conversation_ids: list[int] | None = None,
+    reanalyze: bool = False,
+) -> int:
+    service = SentimentService(db)
+    job = service.create_job(agent_id, conversation_ids=conversation_ids, reanalyze=reanalyze)
+
+    def _execute() -> None:
+        service.run_job(job.id)
+
+    _run_with_retries(f"sentiment job {job.id}", _execute)
+    return job.id
+
+
+def _all_conversation_ids(db: Session, agent_id: str) -> list[int]:
+    from sqlalchemy import select
+
+    from app.models.conversation import Conversation
+
+    return list(db.scalars(select(Conversation.id).where(Conversation.agent_id == agent_id)).all())
 
 
 def _conversation_ids_for_entries(db: Session, agent_id: str, entries: list[dict]) -> list[int]:
@@ -289,6 +317,11 @@ def run_pipeline(
             logger.info("No new conversations to ingest for agent %s since last sync", agent_id)
             notify_milestone(initiated_by, agent_id, MILESTONE_INGEST_DONE, agent_name=agent_name)
             sync_state.mark_sync_completed(agent_id, sync_started_at, imported=0, skipped=0)
+            # Keep the milestone sequence consistent even when there is nothing new to analyze.
+            set_pipeline_run_state(agent_id, stage="sentiment")
+            notify_milestone(initiated_by, agent_id, MILESTONE_SENTIMENT_STARTED, agent_name=agent_name)
+            notify_milestone(initiated_by, agent_id, MILESTONE_SENTIMENT_DONE, agent_name=agent_name)
+            set_pipeline_run_state(agent_id, stage="insights")
             notify_milestone(initiated_by, agent_id, MILESTONE_INSIGHTS_STARTED, agent_name=agent_name)
             notify_milestone(initiated_by, agent_id, MILESTONE_INSIGHTS_DONE, agent_name=agent_name)
             set_pipeline_run_state(agent_id, stage="warming")
@@ -338,6 +371,21 @@ def run_pipeline(
                 all_processed_entries.extend(processed_entries)
 
         notify_milestone(initiated_by, agent_id, MILESTONE_INGEST_DONE, agent_name=agent_name)
+
+        # Stage 2: dual sentiment over the newly-imported conversations (consolidated pass).
+        set_pipeline_run_state(agent_id, stage="sentiment")
+        notify_milestone(initiated_by, agent_id, MILESTONE_SENTIMENT_STARTED, agent_name=agent_name)
+        if all_processed_entries:
+            sentiment_conversation_ids = _conversation_ids_for_entries(db, agent_id, all_processed_entries)
+            if sentiment_conversation_ids:
+                logger.info(
+                    "Running sentiment pass for agent %s (%s new conversations)",
+                    agent_id,
+                    len(sentiment_conversation_ids),
+                )
+                run_sentiment(db, agent_id, conversation_ids=sentiment_conversation_ids)
+        notify_milestone(initiated_by, agent_id, MILESTONE_SENTIMENT_DONE, agent_name=agent_name)
+
         set_pipeline_run_state(agent_id, stage="insights")
         notify_milestone(initiated_by, agent_id, MILESTONE_INSIGHTS_STARTED, agent_name=agent_name)
         if settings.pipeline_insights_per_batch:
@@ -404,6 +452,71 @@ def run_pipeline(
         db.close()
 
 
+def run_reanalyze(agent_id: str, initiated_by: str | None = None) -> None:
+    """Re-run stages 2 + 3 (sentiment + insights) over conversations already in the DB.
+
+    Skips ingest entirely (no Momants fetch, no watermark change) and re-derives sentiment
+    for every member message, then recomputes metrics/insights and warms the cache so the
+    dashboard and PDF report reflect the new models.
+    """
+    if not _acquire_pipeline_lock(agent_id):
+        logger.warning("Pipeline already running for agent %s, skipping reanalyze", agent_id)
+        return
+
+    db = SessionLocal()
+    orphaned = fail_orphaned_jobs(db, agent_id)
+    if orphaned:
+        logger.warning("Cleared %s orphaned running job(s) for agent %s before reanalyze", orphaned, agent_id)
+    client = get_momants_client()
+    agent_name = _safe_agent_name(client, agent_id)
+    set_pipeline_run_state(
+        agent_id, started_at=time.time(), stage="sentiment", cache_done=0, cache_total=0
+    )
+    try:
+        conversation_ids = _all_conversation_ids(db, agent_id)
+        logger.info("Reanalyze for agent %s (%s conversations)", agent_id, len(conversation_ids))
+
+        notify_milestone(initiated_by, agent_id, MILESTONE_SENTIMENT_STARTED, agent_name=agent_name)
+        if conversation_ids:
+            run_sentiment(db, agent_id, conversation_ids=conversation_ids, reanalyze=True)
+        notify_milestone(initiated_by, agent_id, MILESTONE_SENTIMENT_DONE, agent_name=agent_name)
+
+        set_pipeline_run_state(agent_id, stage="insights")
+        notify_milestone(initiated_by, agent_id, MILESTONE_INSIGHTS_STARTED, agent_name=agent_name)
+        if conversation_ids:
+            run_insights(db, agent_id, conversation_ids=conversation_ids)
+            InsightsService(db).finalize_questions(agent_id)
+        notify_milestone(initiated_by, agent_id, MILESTONE_INSIGHTS_DONE, agent_name=agent_name)
+
+        set_pipeline_run_state(agent_id, stage="warming")
+        warm_agent_cache(db, agent_id)
+        _set_scheduler_heartbeat(agent_id)
+        set_pipeline_run_state(agent_id, stage="ready")
+        notify_milestone(
+            initiated_by,
+            agent_id,
+            MILESTONE_PDF_READY,
+            agent_name=agent_name,
+            link=_pdf_link(agent_id),
+        )
+        logger.info("Reanalyze completed for agent %s (%s conversations)", agent_id, len(conversation_ids))
+    except Exception as exc:
+        logger.exception("Reanalyze failed for agent %s", agent_id)
+        try:
+            db.rollback()
+            cleared = fail_orphaned_jobs(db, agent_id, error=f"Reanalyze aborted: {str(exc)[:300]}")
+            if cleared:
+                logger.warning("Failed %s in-flight job(s) for agent %s after abort", cleared, agent_id)
+        except Exception:
+            logger.exception("Failed to clean up in-flight jobs for agent %s", agent_id)
+        notify_milestone(initiated_by, agent_id, MILESTONE_FAILED, agent_name=agent_name, error=str(exc))
+        raise
+    finally:
+        client.close()
+        release_agent_job_lock(agent_id, PIPELINE_LOCK_KIND)
+        db.close()
+
+
 def _set_scheduler_heartbeat(agent_id: str) -> None:
     from app.cache import get_cache_client
 
@@ -434,8 +547,22 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     ingest_parser.add_argument("--skip", type=int, default=0)
     ingest_parser.add_argument("--reanalyze", action="store_true")
 
+    sentiment_parser = sub.add_parser("sentiment", help="Sentiment (stage 2) only")
+    sentiment_parser.add_argument("--agent-id", required=True)
+    sentiment_parser.add_argument("--reanalyze", action="store_true")
+
     insights_parser = sub.add_parser("insights", help="Insights only")
     insights_parser.add_argument("--agent-id", required=True)
+
+    reanalyze_parser = sub.add_parser(
+        "reanalyze", help="Re-run stages 2+3 (sentiment + insights) over existing conversations"
+    )
+    reanalyze_parser.add_argument("--agent-id", required=True)
+    reanalyze_parser.add_argument(
+        "--initiated-by",
+        default=None,
+        help="Email of the user who requested this run (for Slack milestone DMs)",
+    )
 
     warm_parser = sub.add_parser("warm", help="Warm cache only")
     warm_parser.add_argument("--agent-id", required=True)
@@ -480,6 +607,14 @@ def main(argv: list[str] | None = None) -> int:
                 run_ingest(db, args.agent_id, limit=args.limit, reanalyze=args.reanalyze, skip=args.skip)
             finally:
                 release_agent_job_lock(args.agent_id, PIPELINE_LOCK_KIND)
+        elif args.command == "sentiment":
+            if not acquire_agent_job_lock(args.agent_id, PIPELINE_LOCK_KIND):
+                logger.warning("Pipeline lock held for %s, skipping sentiment", args.agent_id)
+                return 0
+            try:
+                run_sentiment(db, args.agent_id, reanalyze=args.reanalyze)
+            finally:
+                release_agent_job_lock(args.agent_id, PIPELINE_LOCK_KIND)
         elif args.command == "insights":
             if not acquire_agent_job_lock(args.agent_id, PIPELINE_LOCK_KIND):
                 logger.warning("Pipeline lock held for %s, skipping insights", args.agent_id)
@@ -490,6 +625,8 @@ def main(argv: list[str] | None = None) -> int:
                 _set_scheduler_heartbeat(args.agent_id)
             finally:
                 release_agent_job_lock(args.agent_id, PIPELINE_LOCK_KIND)
+        elif args.command == "reanalyze":
+            run_reanalyze(args.agent_id, initiated_by=args.initiated_by)
         elif args.command == "warm":
             warm_agent_cache(db, args.agent_id)
             _set_scheduler_heartbeat(args.agent_id)

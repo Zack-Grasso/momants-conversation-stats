@@ -86,8 +86,17 @@ export const api = {
     const q = agentId ? `?agent_id=${encodeURIComponent(agentId)}` : "";
     return request(`/api/insights/jobs/latest${q}`);
   },
+  getLatestSentimentJob: (agentId = null) => {
+    const q = agentId ? `?agent_id=${encodeURIComponent(agentId)}` : "";
+    return request(`/api/sentiment/latest${q}`);
+  },
   startPipeline: (agentId) =>
     request("/api/pipeline/run", {
+      method: "POST",
+      body: JSON.stringify({ agent_id: agentId }),
+    }),
+  reanalyze: (agentId) =>
+    request("/api/pipeline/reanalyze", {
       method: "POST",
       body: JSON.stringify({ agent_id: agentId }),
     }),

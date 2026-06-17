@@ -53,3 +53,32 @@ def start_pipeline(
         status="started",
         message="Pipeline started in background. You'll get Slack updates as each stage completes.",
     )
+
+
+@router.post("/reanalyze", response_model=PipelineRunResponse, status_code=status.HTTP_202_ACCEPTED)
+def reanalyze_pipeline(
+    payload: PipelineRunRequest,
+    user: AuthUser = Depends(get_current_user),
+) -> PipelineRunResponse:
+    """Re-run stages 2 + 3 over conversations already in the DB (skips ingest)."""
+    env = os.environ.copy()
+    env["PRELOAD_MODELS"] = "true"
+    env["APP_ROLE"] = "scheduler"
+    cmd = [sys.executable, "-m", "app.pipeline", "reanalyze", f"--agent-id={payload.agent_id}"]
+    if user.email:
+        cmd.append(f"--initiated-by={user.email}")
+
+    try:
+        backend_root = Path(__file__).resolve().parents[2]
+        subprocess.Popen(cmd, env=env, cwd=str(backend_root))
+    except Exception as exc:
+        logger.exception("Failed to spawn reanalyze for agent %s", payload.agent_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to start reanalyze: {exc}",
+        ) from exc
+
+    return PipelineRunResponse(
+        status="started",
+        message="Reanalyze started in background (sentiment + insights). You'll get Slack updates as each stage completes.",
+    )

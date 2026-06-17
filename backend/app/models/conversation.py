@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, func
@@ -53,6 +54,25 @@ class SentimentAnalysis(Base):
     raw_label: Mapped[str | None] = mapped_column(String(100))
     raw_score: Mapped[float | None] = mapped_column(Float)
     low_confidence: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Stage 2 dual-sentiment fields (nullable for back-compat with rows written by the
+    # legacy single-model path). `stars`/`label`/`score` above stay populated via the
+    # polarity->stars mapping so all downstream metrics/reports keep working.
+    polarity: Mapped[str | None] = mapped_column(String(20))
+    polarity_score: Mapped[float | None] = mapped_column(Float)
+    emotions_json: Mapped[str | None] = mapped_column(Text)
+    original_language: Mapped[str | None] = mapped_column(String(8))
+    translated: Mapped[bool | None] = mapped_column(Boolean, default=False)
     analyzed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     message: Mapped["Message"] = relationship(back_populates="sentiment")
+
+    @property
+    def emotions(self) -> list[dict]:
+        """Parsed emotion predictions ([{label, score}, ...]); empty when not set."""
+        if not self.emotions_json:
+            return []
+        try:
+            parsed = json.loads(self.emotions_json)
+        except (ValueError, TypeError):
+            return []
+        return parsed if isinstance(parsed, list) else []

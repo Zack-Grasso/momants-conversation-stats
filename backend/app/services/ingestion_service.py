@@ -3,14 +3,12 @@ import time
 from datetime import datetime, timezone
 
 from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.integrations.message_normalizer import normalize_message_content
 from app.integrations.momants_client import get_momants_client
-from app.ml.model_registry import get_model_registry
-from app.models.conversation import Conversation, Message, SentimentAnalysis
+from app.models.conversation import Conversation, Message
 from app.models.ingestion_job import IngestionJob
 from app.locks import clear_job_cancel, is_job_cancelled, release_agent_job_lock, request_job_cancel
 from app.pubsub import publish_job_progress
@@ -45,7 +43,6 @@ class IngestionService:
         self.db = db
         self.settings = get_settings()
         self.client = get_momants_client()
-        self.models = get_model_registry()
         self.metrics = MetricsService(db)
 
     def create_job(
@@ -193,50 +190,16 @@ class IngestionService:
             if not message.from_agent and message.content.strip():
                 member_messages.append(message)
 
-        # Commit before ML so threads do not hold DB row locks while waiting on model inference.
+        # Sentiment now runs as a dedicated stage-2 job (SentimentService), not during ingest.
+        # Ingest only persists conversations/messages + tier-1 metrics; the post-ingest sentiment
+        # pass fills SentimentAnalysis and insights recomputes the metrics arc afterward.
         self.db.commit()
-
-        pending: list[Message] = []
-        for message in member_messages:
-            existing = self._get_sentiment(message.id)
-            if existing and not job.reanalyze:
-                continue
-            if existing and job.reanalyze:
-                self.db.delete(existing)
-            pending.append(message)
-
-        analyzed = 0
-        if pending:
-            # Flush any pending reanalyze deletes so the upsert below doesn't collide with
-            # rows we're about to remove in the same transaction.
-            self.db.flush()
-            results = self.models.analyze_sentiment_batch([message.content for message in pending])
-            rows = [
-                {
-                    "message_id": message.id,
-                    "stars": int(result["stars"]),
-                    "label": str(result["label"]),
-                    "score": float(result["score"]),
-                    "model_name": str(result["model_name"]),
-                    "raw_label": str(result["raw_label"]) if result.get("raw_label") else None,
-                    "raw_score": float(result["raw_score"]) if result.get("raw_score") is not None else None,
-                    "low_confidence": bool(result.get("low_confidence", False)),
-                }
-                for message, result in zip(pending, results, strict=True)
-            ]
-            if rows:
-                # Idempotent insert: if another batch concurrently wrote sentiment for the
-                # same message_id (UNIQUE), skip it instead of raising and poisoning the session.
-                stmt = pg_insert(SentimentAnalysis).values(rows).on_conflict_do_nothing(
-                    index_elements=["message_id"]
-                )
-                result_proxy = self.db.execute(stmt)
-                analyzed = result_proxy.rowcount if result_proxy.rowcount is not None else len(rows)
 
         self.metrics.compute_for_conversation(conversation.id, tier1_only=True)
         self.db.commit()
         time.sleep(self.settings.ingestion_fetch_delay_seconds)
-        return analyzed
+        # messages_analyzed now tracks ingested member messages (sentiment runs in stage 2).
+        return len(member_messages)
 
     def _check_cancelled(self, job: IngestionJob) -> bool:
         if not is_job_cancelled("ingest", job.id):
@@ -268,10 +231,6 @@ class IngestionService:
                 "completed_at": job.completed_at,
             },
         )
-
-    def _get_sentiment(self, message_id: int) -> SentimentAnalysis | None:
-        stmt = select(SentimentAnalysis).where(SentimentAnalysis.message_id == message_id)
-        return self.db.scalar(stmt)
 
     def _get_conversation(self, external_id: str) -> Conversation | None:
         return self.db.scalar(select(Conversation).where(Conversation.external_id == external_id))

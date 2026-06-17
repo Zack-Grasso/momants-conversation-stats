@@ -1,6 +1,9 @@
+import hashlib
+import json
 import logging
 import os
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from functools import lru_cache
 from pathlib import Path
 
@@ -35,6 +38,20 @@ BINARY_LABEL_MAP: dict[str, tuple[int, str]] = {
     "neutral": (3, "NEUTRAL"),
 }
 
+# Maps the cardiffnlp/twitter-roberta-base-sentiment-latest output (and its LABEL_n aliases)
+# onto the legacy stars/label contract that metrics/reports/timeline all read.
+POLARITY_LABEL_MAP: dict[str, tuple[str, int, str]] = {
+    "negative": ("negative", 2, "NEGATIVE"),
+    "neutral": ("neutral", 3, "NEUTRAL"),
+    "positive": ("positive", 4, "POSITIVE"),
+    "label_0": ("negative", 2, "NEGATIVE"),
+    "label_1": ("neutral", 3, "NEUTRAL"),
+    "label_2": ("positive", 4, "POSITIVE"),
+}
+
+# ISO 639-1 codes for the languages we configure lingua to detect.
+LINGUA_LANGUAGE_NAMES = ("ENGLISH", "DUTCH", "GERMAN", "SPANISH", "FRENCH")
+
 
 class ModelRegistry:
     """Lazy-loads Hugging Face models and reuses on-disk cache across restarts."""
@@ -45,6 +62,11 @@ class ModelRegistry:
         self._sentiment_inference_lock = threading.Lock()
         self._embedding_inference_lock = threading.Lock()
         self._zero_shot_inference_lock = threading.Lock()
+        # Stage 2 dual-sentiment models run in parallel, so each gets its own inference lock.
+        self._polarity_inference_lock = threading.Lock()
+        self._emotion_inference_lock = threading.Lock()
+        self._language_detector = None
+        self._translate_client = None
         self._pipelines: dict[str, object] = {}
         self._settings = get_settings()
         self._ensure_cache_dirs()
@@ -54,14 +76,22 @@ class ModelRegistry:
         cache_root.mkdir(parents=True, exist_ok=True)
         (cache_root / "hub").mkdir(parents=True, exist_ok=True)
         os.environ.setdefault("HF_HOME", str(cache_root))
-        os.environ.setdefault("TRANSFORMERS_CACHE", str(cache_root / "hub"))
         os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
         os.environ.setdefault("OMP_NUM_THREADS", "1")
         os.environ.setdefault("MKL_NUM_THREADS", "1")
         os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
     def preload(self) -> None:
-        self.get_sentiment_pipeline()
+        # Stage 2: language detector is always local (tiny). The polarity/emotion models run
+        # remotely on HF when configured, so we skip loading those torch checkpoints locally.
+        self.get_language_detector()
+        if self._settings.sentiment_uses_remote_inference:
+            from app.ml.hf_text_classification import get_hf_text_classification_client
+
+            get_hf_text_classification_client()
+        else:
+            self.get_polarity_pipeline()
+            self.get_emotion_pipeline()
         if self._settings.app_role in ("worker", "scheduler"):
             self.get_embedding_model()
             if self._settings.intent_uses_remote_inference:
@@ -176,6 +206,255 @@ class ModelRegistry:
             logger.exception("HF sentiment batch analysis failed; falling back to per-text")
             for index, _ in cleaned:
                 results[index] = self.analyze_sentiment(texts[index])
+        return results
+
+    # --- Stage 2: language detection -> translation -> dual polarity + emotion ----------------
+
+    def get_language_detector(self):
+        if self._language_detector is None:
+            with self._load_lock:
+                if self._language_detector is None:
+                    from lingua import Language, LanguageDetectorBuilder
+
+                    languages = [getattr(Language, name) for name in LINGUA_LANGUAGE_NAMES]
+                    logger.info("Loading lingua language detector (%s)", ", ".join(LINGUA_LANGUAGE_NAMES))
+                    self._language_detector = LanguageDetectorBuilder.from_languages(*languages).build()
+        return self._language_detector
+
+    def detect_language(self, text: str) -> str:
+        """Best-effort ISO 639-1 language code; defaults to ``en`` on empty/uncertain input."""
+        if not text or not text.strip():
+            return "en"
+        try:
+            language = self.get_language_detector().detect_language_of(text)
+            if language is None:
+                return "en"
+            return language.iso_code_639_1.name.lower()
+        except Exception:
+            logger.exception("Language detection failed; defaulting to en")
+            return "en"
+
+    def get_polarity_pipeline(self):
+        model_name = self._settings.polarity_model
+        with self._load_lock:
+            if model_name not in self._pipelines:
+                logger.info("Loading polarity model '%s'", model_name)
+                self._pipelines[model_name] = pipeline(
+                    "sentiment-analysis",
+                    model=model_name,
+                    device=-1,
+                )
+                logger.info("Polarity model '%s' ready", model_name)
+            return self._pipelines[model_name]
+
+    def get_emotion_pipeline(self):
+        model_name = self._settings.emotion_model
+        with self._load_lock:
+            if model_name not in self._pipelines:
+                logger.info("Loading emotion model '%s'", model_name)
+                self._pipelines[model_name] = pipeline(
+                    "text-classification",
+                    model=model_name,
+                    device=-1,
+                    top_k=self._settings.emotion_top_k,
+                )
+                logger.info("Emotion model '%s' ready", model_name)
+            return self._pipelines[model_name]
+
+    def get_translate_client(self):
+        # Reuse a single pooled HTTP client for the Google Translation v2 REST endpoint. We call
+        # the REST API with the API key directly (the google-cloud client library ignores api_key
+        # auth and falls back to Application Default Credentials, which we don't have in-container).
+        if not self._settings.google_translate_api_key.strip():
+            return None
+        if self._translate_client is None:
+            with self._load_lock:
+                if self._translate_client is None:
+                    import httpx
+
+                    logger.info("Initializing Google Cloud Translation v2 REST client")
+                    self._translate_client = httpx.Client(timeout=self._settings.hf_inference_timeout_seconds)
+        return self._translate_client
+
+    def translate_to_english(self, text: str, source_lang: str) -> tuple[str, bool]:
+        """Translate ``text`` to English. Returns (text, translated?).
+
+        Skips the API entirely for English text or when no key is configured, and falls
+        back to the original text on any error so sentiment analysis never hard-fails.
+        """
+        if not text or not text.strip() or source_lang == "en":
+            return text, False
+        client = self.get_translate_client()
+        if client is None:
+            return text, False
+
+        cache_key = None
+        try:
+            from app.cache import cache_get
+
+            digest = hashlib.sha256(f"{source_lang}:{text}".encode("utf-8")).hexdigest()
+            cache_key = f"translate:en:{digest}"
+            cached = cache_get(cache_key)
+            if isinstance(cached, str):
+                return cached, True
+        except Exception:
+            logger.exception("Translation cache read failed")
+            cache_key = None
+
+        try:
+            response = client.post(
+                "https://translation.googleapis.com/language/translate/v2",
+                params={"key": self._settings.google_translate_api_key.strip()},
+                json={"q": text, "source": source_lang, "target": "en", "format": "text"},
+            )
+            response.raise_for_status()
+            translations = response.json()["data"]["translations"]
+            translated = str(translations[0].get("translatedText") or text)
+        except Exception:
+            logger.exception("Google translation failed for lang=%s; using original text", source_lang)
+            return text, False
+
+        if cache_key is not None:
+            try:
+                from app.cache import cache_set
+
+                cache_set(cache_key, translated, ttl=self._settings.translation_cache_ttl_seconds)
+            except Exception:
+                logger.exception("Translation cache write failed")
+        return translated, True
+
+    def _polarity_label(self, raw_label: str) -> tuple[str, int, str]:
+        key = raw_label.lower().strip()
+        if key in POLARITY_LABEL_MAP:
+            return POLARITY_LABEL_MAP[key]
+        # Fall back to the generic resolver so unexpected labels still map to stars.
+        stars, label = self._resolve_label(raw_label)
+        polarity = "positive" if label == "POSITIVE" else "negative" if label == "NEGATIVE" else "neutral"
+        return polarity, stars, label
+
+    def _empty_v2_result(self) -> dict:
+        return {
+            "stars": 3,
+            "label": "NEUTRAL",
+            "score": 0.0,
+            "model_name": f"{self._settings.polarity_model}+{self._settings.emotion_model}",
+            "raw_label": None,
+            "raw_score": None,
+            "low_confidence": True,
+            "polarity": "neutral",
+            "polarity_score": 0.0,
+            "emotions": [],
+            "original_language": "en",
+            "translated": False,
+        }
+
+    def _run_polarity_batch(self, texts: list[str]) -> list[tuple[str, float]]:
+        if not texts:
+            return []
+        if self._settings.sentiment_uses_remote_inference:
+            from app.ml.hf_text_classification import get_hf_text_classification_client
+
+            outputs = get_hf_text_classification_client().classify_batch(
+                texts,
+                model_id=self._settings.polarity_model,
+                endpoint=self._settings.polarity_inference_endpoint,
+                top_k=1,
+            )
+            return [(str(out[0]["label"]), float(out[0]["score"])) for out in outputs]
+
+        classifier = self.get_polarity_pipeline()
+        with self._polarity_inference_lock:
+            outputs = classifier([t[:512] for t in texts], batch_size=max(1, self._settings.sentiment_batch_size))
+        results: list[tuple[str, float]] = []
+        for output in outputs:
+            label, score = self._pick_best_result(output)
+            results.append((label, score))
+        return results
+
+    def _run_emotion_batch(self, texts: list[str]) -> list[list[dict]]:
+        if not texts:
+            return []
+        if self._settings.sentiment_uses_remote_inference:
+            from app.ml.hf_text_classification import get_hf_text_classification_client
+
+            outputs = get_hf_text_classification_client().classify_batch(
+                texts,
+                model_id=self._settings.emotion_model,
+                endpoint=self._settings.emotion_inference_endpoint,
+                top_k=self._settings.emotion_top_k,
+            )
+            return [
+                [{"label": str(item["label"]), "score": round(float(item["score"]), 4)} for item in out]
+                for out in outputs
+            ]
+
+        classifier = self.get_emotion_pipeline()
+        with self._emotion_inference_lock:
+            outputs = classifier([t[:512] for t in texts], batch_size=max(1, self._settings.sentiment_batch_size))
+        emotions: list[list[dict]] = []
+        for output in outputs:
+            items = output if isinstance(output, list) else [output]
+            emotions.append(
+                [
+                    {"label": str(item["label"]), "score": round(float(item["score"]), 4)}
+                    for item in items
+                ]
+            )
+        return emotions
+
+    def analyze_sentiment_v2(self, text: str) -> dict:
+        return self.analyze_sentiment_v2_batch([text])[0]
+
+    def analyze_sentiment_v2_batch(self, texts: list[str]) -> list[dict]:
+        """Stage 2 pipeline: detect language -> translate to EN -> parallel polarity + emotion.
+
+        Always returns one dict per input (neutral placeholder for blank/failed entries) and
+        keeps the legacy stars/label/score fields populated for downstream metrics/reports.
+        """
+        results: list[dict] = [self._empty_v2_result() for _ in texts]
+        cleaned: list[tuple[int, str]] = [(i, t) for i, t in enumerate(texts) if t and t.strip()]
+        if not cleaned:
+            return results
+
+        languages: list[str] = []
+        english_texts: list[str] = []
+        translated_flags: list[bool] = []
+        for _, text in cleaned:
+            lang = self.detect_language(text)
+            english, was_translated = self.translate_to_english(text, lang)
+            languages.append(lang)
+            english_texts.append(english)
+            translated_flags.append(was_translated)
+
+        try:
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                polarity_future = executor.submit(self._run_polarity_batch, english_texts)
+                emotion_future = executor.submit(self._run_emotion_batch, english_texts)
+                polarities = polarity_future.result()
+                emotions = emotion_future.result()
+        except Exception:
+            logger.exception("Stage 2 dual-sentiment batch failed")
+            return results
+
+        threshold = self._settings.sentiment_confidence_threshold
+        model_name = f"{self._settings.polarity_model}+{self._settings.emotion_model}"
+        for offset, (index, _) in enumerate(cleaned):
+            raw_label, raw_score = polarities[offset]
+            polarity, stars, label = self._polarity_label(raw_label)
+            results[index] = {
+                "stars": stars,
+                "label": label,
+                "score": raw_score,
+                "model_name": model_name,
+                "raw_label": raw_label,
+                "raw_score": raw_score,
+                "low_confidence": raw_score < threshold,
+                "polarity": polarity,
+                "polarity_score": raw_score,
+                "emotions": emotions[offset] if offset < len(emotions) else [],
+                "original_language": languages[offset],
+                "translated": translated_flags[offset],
+            }
         return results
 
     def get_embedding_model(self):

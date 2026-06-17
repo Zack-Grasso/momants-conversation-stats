@@ -31,6 +31,21 @@ class Settings(BaseSettings):
 
     # Hugging Face
     sentiment_model: str = "tabularisai/multilingual-sentiment-analysis"
+    # Stage 2 (dual sentiment) models. Polarity + emotion run on English text, so a
+    # language-detection + translation step precedes them (see model_registry / sentiment_service).
+    polarity_model: str = "cardiffnlp/twitter-roberta-base-sentiment-latest"
+    emotion_model: str = "SamLowe/roberta-base-go_emotions"
+    emotion_top_k: int = 3
+    # Where the stage-2 polarity/emotion models run: local (CPU in-container) | hf_api
+    # (HF serverless router) | hf_endpoint (dedicated Inference Endpoint URLs below).
+    # Uses HF_TOKEN + the shared hf_inference_* throughput settings.
+    sentiment_inference_mode: str = "local"
+    polarity_inference_endpoint: str = ""
+    emotion_inference_endpoint: str = ""
+    # Google Cloud Translation API v2 (Basic). Translation is skipped entirely when the
+    # detected language is English or the key is empty.
+    google_translate_api_key: str = ""
+    translation_cache_ttl_seconds: int = 86400
     embedding_model: str = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
     intent_model: str = "MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7"
     intent_inference_mode: str = "local"  # local | hf_api | hf_endpoint
@@ -110,10 +125,12 @@ class Settings(BaseSettings):
     max_concurrent_jobs: int = 3
     max_concurrent_ingest: int = 3
     max_concurrent_insights: int = 2
+    max_concurrent_sentiment: int = 2
     # Per-agent caps so a single agent can't take every global slot (fairness for parallel
     # agent runs). The effective limit is min(global, per-agent).
     max_concurrent_ingest_per_agent: int = 8
     max_concurrent_insights_per_agent: int = 4
+    max_concurrent_sentiment_per_agent: int = 4
     # Texts handed to a single zero-shot call; they are now classified concurrently, so a
     # larger batch keeps the HF inference pool well-fed.
     intent_batch_size: int = 32
@@ -141,6 +158,10 @@ class Settings(BaseSettings):
     @property
     def intent_uses_remote_inference(self) -> bool:
         return self.intent_inference_mode in ("hf_api", "hf_endpoint")
+
+    @property
+    def sentiment_uses_remote_inference(self) -> bool:
+        return self.sentiment_inference_mode in ("hf_api", "hf_endpoint")
 
     @property
     def intent_label_list(self) -> list[str]:

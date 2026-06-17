@@ -111,7 +111,13 @@ class ConversationService:
         )
 
     def _attach_sentiment(self, message: Message) -> None:
-        result = self.models.analyze_sentiment(message.content)
+        import json as _json
+
+        # Only member (user) messages get sentiment/translation; agent replies are skipped.
+        if message.from_agent or not message.content or not message.content.strip():
+            return
+
+        result = self.models.analyze_sentiment_v2(message.content)
         analysis = SentimentAnalysis(
             message_id=message.id,
             stars=int(result["stars"]),
@@ -121,6 +127,11 @@ class ConversationService:
             raw_label=str(result["raw_label"]) if result.get("raw_label") else None,
             raw_score=float(result["raw_score"]) if result.get("raw_score") is not None else None,
             low_confidence=bool(result.get("low_confidence", False)),
+            polarity=str(result["polarity"]) if result.get("polarity") else None,
+            polarity_score=float(result["polarity_score"]) if result.get("polarity_score") is not None else None,
+            emotions_json=_json.dumps(result.get("emotions") or []),
+            original_language=str(result["original_language"]) if result.get("original_language") else None,
+            translated=bool(result.get("translated", False)),
         )
         self.db.add(analysis)
 

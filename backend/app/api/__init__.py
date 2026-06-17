@@ -1,6 +1,19 @@
 from fastapi import APIRouter, Depends
 
-from app.api import agents, auth, conversations, health, ingest, insights, jobs, pipeline, reports, scheduler, system
+from app.api import (
+    agents,
+    auth,
+    conversations,
+    health,
+    ingest,
+    insights,
+    jobs,
+    pipeline,
+    reports,
+    scheduler,
+    sentiment,
+    system,
+)
 from app.auth.deps import get_current_user
 
 api_router = APIRouter()
@@ -11,6 +24,7 @@ protected = APIRouter(dependencies=[Depends(get_current_user)])
 protected.include_router(agents.router, prefix="/agents", tags=["agents"])
 protected.include_router(conversations.router, prefix="/conversations", tags=["conversations"])
 protected.include_router(ingest.router, prefix="/ingest", tags=["ingest"])
+protected.include_router(sentiment.router, prefix="/sentiment", tags=["sentiment"])
 protected.include_router(insights.router, prefix="/insights", tags=["insights"])
 protected.include_router(reports.router, prefix="/reports", tags=["reports"])
 protected.include_router(pipeline.router, prefix="/pipeline", tags=["pipeline"])

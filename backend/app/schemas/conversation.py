@@ -13,6 +13,11 @@ class SentimentRead(BaseModel):
     raw_label: str | None = None
     raw_score: float | None = None
     low_confidence: bool
+    polarity: str | None = None
+    polarity_score: float | None = None
+    emotions: list[dict] = []
+    original_language: str | None = None
+    translated: bool | None = None
     analyzed_at: datetime
 
 
