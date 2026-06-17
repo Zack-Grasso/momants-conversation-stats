@@ -2,6 +2,8 @@ services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-conversation_stats}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-conversation_stats}
@@ -17,6 +19,8 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
     command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
@@ -30,6 +34,8 @@ services:
     # Chromium-based HTML -> PDF conversion for the exportable client report.
     image: gotenberg/gotenberg:8
     restart: unless-stopped
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
     command:
       - gotenberg
       - --chromium-allow-list=.*
@@ -102,6 +108,32 @@ services:
       - "5173:80"
     depends_on:
       - api
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - frontend
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+
+  watchtower:
+    image: containrrr/watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      WATCHTOWER_CLEANUP: "true"
+      WATCHTOWER_POLL_INTERVAL: ${WATCHTOWER_POLL_INTERVAL:-86400}
+      WATCHTOWER_LABEL_ENABLE: "true"
+      WATCHTOWER_INCLUDE_RESTARTING: "true"
+      WATCHTOWER_NOTIFICATIONS: ${WATCHTOWER_NOTIFICATIONS:-}
+      WATCHTOWER_NOTIFICATION_SLACK_HOOK_URL: ${WATCHTOWER_NOTIFICATION_SLACK_HOOK_URL:-}
+    labels:
+      - com.centurylinklabs.watchtower.enable=false
 
 volumes:
   postgres_data:

@@ -27,7 +27,7 @@ def test_notify_milestone_disabled_is_noop():
 
 
 def test_notify_milestone_sends_dm_when_enabled():
-    settings = Settings(slack_bot_token="xoxb-test", app_base_url="https://rapport.momants.ai")
+    settings = Settings(slack_bot_token="xoxb-test", app_base_url="https://report.momants.ai")
     lookup = _ok({"ok": True, "user": {"id": "U123"}})
     post = _ok({"ok": True})
 
@@ -40,7 +40,7 @@ def test_notify_milestone_sends_dm_when_enabled():
             "user@momants.ai",
             "agent-12345678",
             MILESTONE_PDF_READY,
-            link="https://rapport.momants.ai/results?agent_id=agent-12345678",
+            link="https://report.momants.ai/results?agent_id=agent-12345678",
         )
 
     assert sent is True

@@ -17,18 +17,14 @@ from app.models.insights import ConversationMetrics, UnansweredQuestion
 from app.services.insights_service import InsightsService
 from app.utils.report_charts import (
     daily_volume_chart_svg,
-    emotion_timeline_chart_svg,
     hourly_bars_chart_svg,
     sentiment_arc_chart_svg,
 )
 from app.utils.report_data import (
     CHANNEL_LABELS,
-    EMOTION_LABEL_NL,
-    aggregate_emotion_timeline,
     aggregate_sentiment_arc,
     apply_momants_stats_fallback,
     build_channel_fragments,
-    build_emotion_timeline_insight,
     daily_conversation_counts,
     dominant_channel,
     highest_sentiment_channel,
@@ -49,6 +45,12 @@ from app.utils.report_format import (
 
 TEMPLATE_PATH = Path(__file__).resolve().parents[2] / "templates" / "conversation-analysis-template-v2.html"
 
+# Skip short greetings and other trivial member messages when picking opportunity examples.
+TRIVIAL_QUESTION_RE = re.compile(
+    r"^(hallo|hoi|hey|hi|dag|dank|thanks|bedankt|oké?|oke|ja|nee|top|super|goed|mooi)\b",
+    re.I,
+)
+STATUS_PRIORITY = {"weak_answer": 0, "not_answered": 1, "no_reply": 2}
 # A conversation counts as "doorverwezen" (referred to the event's customer service) when any
 # agent message contains an email address.
 EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
@@ -94,7 +96,6 @@ TEMPLATE_VARS = [
     "pct_unanswered",
     "unanswered_insight",
     "answered_questions_insight",
-    "emotion_timeline_insight",
     "unanswered_no_reply_count",
     "unanswered_weak_answer_count",
     "unanswered_semantic_count",
@@ -337,24 +338,17 @@ class ReportService:
         channel_fragments = build_channel_fragments(dict(channel_counts), channel_sentiments, total_conversations)
 
         arc = aggregate_sentiment_arc(metrics)
-        emotion_timeline = aggregate_emotion_timeline(conversations)
-        set_var(
-            "emotion_timeline_insight",
-            build_emotion_timeline_insight(emotion_timeline),
-            required=False,
-        )
+        opportunity_examples = _select_opportunity_examples(unanswered, limit=4)
         fragments = {
             "chart_slide2_inner": daily_volume_chart_svg(daily_counts, peak_day_dt),
             "chart_slide3_inner": hourly_bars_chart_svg(hour_counts, peak_hour_int),
             "chart_slide4_inner": sentiment_arc_chart_svg(arc, avg_start, avg_end),
-            "chart_emotion_timeline_inner": emotion_timeline_chart_svg(
-                emotion_timeline, EMOTION_LABEL_NL
-            ),
             "unanswered_examples_page1": _render_unanswered_examples(examples, 0, 18),
             "unanswered_examples_page2": _render_unanswered_examples(examples, 18, 18),
             "answered_questions_grid": _render_answered_questions(
                 answered_ranked, 0, 18, compact=True, tiny=True
             ),
+            "opportunity_cards": _render_opportunity_cards(opportunity_examples),
             **channel_fragments,
         }
 
@@ -365,7 +359,7 @@ class ReportService:
             "fragments": fragments,
             "missing": sorted(set(missing)),
             "static_sections": [],
-            "charts_generated": bool(daily_counts or hour_counts or arc or emotion_timeline),
+            "charts_generated": bool(daily_counts or hour_counts or arc),
             "chart_source": chart_source,
         }
 
@@ -544,6 +538,75 @@ def _render_unanswered_examples(examples: list[str], start: int, count: int) -> 
     return "\n          ".join(cells)
 
 
+def _is_substantive_question(text: str) -> bool:
+    cleaned = text.strip()
+    if len(cleaned) < 35:
+        return False
+    if TRIVIAL_QUESTION_RE.match(cleaned):
+        return False
+    return True
+
+
+def _select_opportunity_examples(
+    unanswered: list[UnansweredQuestion],
+    *,
+    limit: int = 4,
+) -> list[UnansweredQuestion]:
+    candidates = [
+        item
+        for item in unanswered
+        if item.question_text.strip() and _is_substantive_question(item.question_text)
+    ]
+    if not candidates:
+        candidates = [item for item in unanswered if item.question_text.strip()]
+
+    def sort_key(item: UnansweredQuestion) -> tuple:
+        status_rank = STATUS_PRIORITY.get(item.status, 99)
+        reply_bonus = 0 if (item.agent_reply_text or "").strip() else 1
+        similarity = item.similarity_score if item.similarity_score is not None else 1.0
+        return (status_rank, reply_bonus, -len(item.question_text), similarity)
+
+    candidates.sort(key=sort_key)
+    return candidates[:limit]
+
+
+def _render_opportunity_cards(examples: list[UnansweredQuestion]) -> str:
+    cards: list[str] = []
+    for index in range(4):
+        if index < len(examples):
+            item = examples[index]
+            question = _escape_html(_truncate(item.question_text.strip(), 160))
+            reply = (item.agent_reply_text or "").strip()
+            if reply:
+                answer = _escape_html(_truncate(reply, 220))
+            elif item.status == "no_reply":
+                answer = "Geen antwoord gegeven"
+            else:
+                answer = "—"
+            cards.append(
+                f'<div class="opportunity">'
+                f'<div class="olbl">Vraag</div>'
+                f'<div class="oquestion">"{question}"</div>'
+                f'<div class="olbl">Huidig antwoord</div>'
+                f'<div class="oanswer">{answer}</div>'
+                f'<div class="olbl">Nieuw antwoord</div>'
+                f'<div class="oblank"></div>'
+                f"</div>"
+            )
+        else:
+            cards.append(
+                '<div class="opportunity">'
+                '<div class="olbl">Vraag</div>'
+                '<div class="oquestion">&nbsp;</div>'
+                '<div class="olbl">Huidig antwoord</div>'
+                '<div class="oanswer">&nbsp;</div>'
+                '<div class="olbl">Nieuw antwoord</div>'
+                '<div class="oblank"></div>'
+                "</div>"
+            )
+    return "\n      ".join(cards)
+
+
 def _build_unanswered_insight(
     breakdown: dict[str, int],
     total_unanswered: int,
@@ -551,7 +614,7 @@ def _build_unanswered_insight(
     top_example: str,
 ) -> str:
     if total_unanswered <= 0:
-        return "Geen onbeantwoorde vragen in deze periode — de agent beantwoordt alles wat leden werd."
+        return "Geen onbeantwoorde vragen in deze periode — de agent beantwoordt alles wat mensen vroegen."
 
     weak = breakdown.get("weak_answer", 0)
     no_reply = breakdown.get("no_reply", 0)
@@ -569,7 +632,7 @@ def _build_unanswered_insight(
 
     parts = [
         f"{dominant_count} van {total_unanswered} onbeantwoorde vragen ({dominant_pct}%) hadden een {label}",
-        f"— dat is {pct_label}% van alle member-vragen.",
+        f"— dat is {pct_label}% van alle vragen van mensen.",
         advice,
     ]
     if top_example.strip():

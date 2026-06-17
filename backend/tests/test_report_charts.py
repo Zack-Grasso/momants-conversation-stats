@@ -18,7 +18,6 @@ def test_template_contains_dynamic_chart_placeholders():
     assert "{{chart_slide2_inner}}" in template
     assert "{{chart_slide3_inner}}" in template
     assert "{{chart_slide4_inner}}" in template
-    assert "{{chart_emotion_timeline_inner}}" in template
     assert "WhatsApp is het dominante kanaal" not in template
     # Channels are rendered conditionally via fragments (Instagram hidden when empty).
     assert "{{channel_pills}}" in template

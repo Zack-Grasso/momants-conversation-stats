@@ -471,7 +471,7 @@ def build_emotion_timeline_insight(timeline: EmotionTimeline | None) -> str:
             f"(bericht #1 → #{len(timeline.points)})."
         )
     return (
-        f"Leden starten vaak met {start_label}; tegen bericht #{len(timeline.points)} "
+        f"Mensen starten vaak met {start_label}; tegen bericht #{len(timeline.points)} "
         f"verschuift dat naar {end_label}."
     )
 

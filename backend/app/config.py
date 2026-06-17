@@ -80,6 +80,7 @@ class Settings(BaseSettings):
     # Slack notifications: DM the user who requested a rapport run at each milestone.
     # Requires a bot token (xoxb-...) with scopes: users:read.email, chat:write, im:write.
     slack_bot_token: str = ""
+    slack_signing_secret: str = ""
     slack_timeout_seconds: float = 10.0
     # Public base URL of the rapport dashboard, used to build the "PDF ready" link.
     app_base_url: str = "http://localhost:5173"
@@ -142,6 +143,10 @@ class Settings(BaseSettings):
     @property
     def slack_enabled(self) -> bool:
         return bool(self.slack_bot_token.strip())
+
+    @property
+    def slack_commands_enabled(self) -> bool:
+        return bool(self.slack_bot_token.strip() and self.slack_signing_secret.strip())
 
     @property
     def auth_allowed_email_domain_list(self) -> list[str]:

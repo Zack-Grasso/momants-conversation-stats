@@ -66,6 +66,36 @@ class SlackNotifier:
             return None
         return data.get("user", {}).get("id")
 
+    def lookup_user_email(self, user_id: str) -> str | None:
+        """Resolve a Slack user's email from their user id, or None if unavailable."""
+        response = httpx.get(
+            f"{SLACK_API_BASE}/users.info",
+            headers={"Authorization": f"Bearer {self._token}"},
+            params={"user": user_id},
+            timeout=self._timeout,
+        )
+        response.raise_for_status()
+        data = response.json()
+        if not data.get("ok"):
+            logger.warning("Slack users.info failed for %s: %s", user_id, data.get("error"))
+            return None
+        profile = data.get("user", {}).get("profile", {})
+        email = profile.get("email")
+        return str(email).lower() if email else None
+
+    def open_modal(self, trigger_id: str, view: dict) -> bool:
+        """Open a modal dialog. Returns True on success."""
+        self._post("views.open", {"trigger_id": trigger_id, "view": view})
+        return True
+
+    def post_ephemeral(self, channel: str, user_id: str, text: str) -> bool:
+        """Post an ephemeral message visible only to one user in a channel."""
+        self._post(
+            "chat.postEphemeral",
+            {"channel": channel, "user": user_id, "text": text},
+        )
+        return True
+
     def dm(self, email: str, text: str) -> bool:
         """Send a direct message to the user identified by email. Returns success."""
         user_id = self.lookup_user_id(email)
@@ -75,11 +105,16 @@ class SlackNotifier:
         return True
 
 
-def _get_notifier() -> SlackNotifier | None:
+def get_slack_notifier() -> SlackNotifier | None:
+    """Return a configured Slack notifier, or None when Slack is disabled."""
     settings = get_settings()
     if not settings.slack_enabled:
         return None
     return SlackNotifier(settings.slack_bot_token.strip(), settings.slack_timeout_seconds)
+
+
+def _get_notifier() -> SlackNotifier | None:
+    return get_slack_notifier()
 
 
 def _format_message(

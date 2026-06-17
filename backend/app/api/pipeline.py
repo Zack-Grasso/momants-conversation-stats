@@ -1,8 +1,4 @@
 import logging
-import os
-import subprocess
-import sys
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -10,6 +6,13 @@ from pydantic import BaseModel, Field
 from app.auth import get_current_user
 from app.auth.session import AuthUser
 from app.config import get_settings
+from app.services.pipeline_launcher import (
+    PipelineBusyError,
+    PipelineConfigError,
+    launch_reanalyze,
+    launch_run,
+)
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -29,24 +32,17 @@ def start_pipeline(
     payload: PipelineRunRequest,
     user: AuthUser = Depends(get_current_user),
 ) -> PipelineRunResponse:
-    settings = get_settings()
-    if not settings.momants_api_base_url:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="MOMANTS_API_BASE_URL is not configured")
-    env = os.environ.copy()
-    env["PRELOAD_MODELS"] = "true"
-    env["APP_ROLE"] = "scheduler"
-    cmd = [sys.executable, "-m", "app.pipeline", "run", f"--agent-id={payload.agent_id}"]
-    if user.email:
-        cmd.append(f"--initiated-by={user.email}")
-
     try:
-        backend_root = Path(__file__).resolve().parents[2]
-        subprocess.Popen(cmd, env=env, cwd=str(backend_root))
-    except Exception as exc:
+        launch_run(payload.agent_id, user.email)
+    except PipelineConfigError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except PipelineBusyError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except RuntimeError as exc:
         logger.exception("Failed to spawn pipeline for agent %s", payload.agent_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to start pipeline: {exc}",
+            detail=str(exc),
         ) from exc
 
     return PipelineRunResponse(
@@ -61,21 +57,15 @@ def reanalyze_pipeline(
     user: AuthUser = Depends(get_current_user),
 ) -> PipelineRunResponse:
     """Re-run stages 2 + 3 over conversations already in the DB (skips ingest)."""
-    env = os.environ.copy()
-    env["PRELOAD_MODELS"] = "true"
-    env["APP_ROLE"] = "scheduler"
-    cmd = [sys.executable, "-m", "app.pipeline", "reanalyze", f"--agent-id={payload.agent_id}"]
-    if user.email:
-        cmd.append(f"--initiated-by={user.email}")
-
     try:
-        backend_root = Path(__file__).resolve().parents[2]
-        subprocess.Popen(cmd, env=env, cwd=str(backend_root))
-    except Exception as exc:
+        launch_reanalyze(payload.agent_id, user.email)
+    except PipelineBusyError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except RuntimeError as exc:
         logger.exception("Failed to spawn reanalyze for agent %s", payload.agent_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to start reanalyze: {exc}",
+            detail=str(exc),
         ) from exc
 
     return PipelineRunResponse(

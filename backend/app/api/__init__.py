@@ -12,6 +12,7 @@ from app.api import (
     reports,
     scheduler,
     sentiment,
+    slack,
     system,
 )
 from app.auth.deps import get_current_user
@@ -19,6 +20,7 @@ from app.auth.deps import get_current_user
 api_router = APIRouter()
 api_router.include_router(health.router, tags=["health"])
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
+api_router.include_router(slack.router, prefix="/slack", tags=["slack"])
 
 protected = APIRouter(dependencies=[Depends(get_current_user)])
 protected.include_router(agents.router, prefix="/agents", tags=["agents"])
