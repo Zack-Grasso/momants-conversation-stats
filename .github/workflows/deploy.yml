@@ -10,6 +10,9 @@ jobs:
     runs-on: self-hosted
 
     steps:
+      - name: Unlock keychain
+        run: security unlock-keychain -p ${{ secrets.KEYCHAIN_PASSWORD }} ~/Library/Keychains/login.keychain-db
+
       - name: Pull latest code
         run: |
           cd /Users/server/momants-conversation-stats
