@@ -22,6 +22,7 @@ from app.utils.report_charts import (
 )
 from app.utils.report_data import (
     CHANNEL_LABELS,
+    EMOTION_LABEL_NL,
     aggregate_sentiment_arc,
     apply_momants_stats_fallback,
     build_channel_fragments,
@@ -50,6 +51,22 @@ TRIVIAL_QUESTION_RE = re.compile(
     r"^(hallo|hoi|hey|hi|dag|dank|thanks|bedankt|oké?|oke|ja|nee|top|super|goed|mooi)\b",
     re.I,
 )
+SILLY_QUESTION_RE = re.compile(
+    r"\b(kikker|kwak|duif|pigeon|frog|grappig|ik ben een|speel je|pretend)\b|"
+    r"in die taal uitleggen",
+    re.I,
+)
+OFF_TOPIC_TECH_RE = re.compile(
+    r"\b(\.net|c#|python|javascript|dictionary|programming|code\b)\b",
+    re.I,
+)
+FESTIVAL_TOPIC_RE = re.compile(
+    r"\b(ticket|korting|discount|festival|reis|parkeren|camp|line.?up|programma|"
+    r"entree|toegang|bus|trein|hotel|presale|voorverkoop|order)\b",
+    re.I,
+)
+MISDIRECTED_TOPIC_RE = re.compile(r"\b(aangifte|belasting|tax return)\b", re.I)
+URL_RE = re.compile(r"https?://\S+")
 STATUS_PRIORITY = {"weak_answer": 0, "not_answered": 1, "no_reply": 2}
 # A conversation counts as "doorverwezen" (referred to the event's customer service) when any
 # agent message contains an email address.
@@ -348,7 +365,8 @@ class ReportService:
             "answered_questions_grid": _render_answered_questions(
                 answered_ranked, 0, 18, compact=True, tiny=True
             ),
-            "opportunity_cards": _render_opportunity_cards(opportunity_examples),
+            "opportunity_cards_page1": _render_opportunity_cards(opportunity_examples, 0, 2),
+            "opportunity_cards_page2": _render_opportunity_cards(opportunity_examples, 2, 2),
             **channel_fragments,
         }
 
@@ -547,64 +565,81 @@ def _is_substantive_question(text: str) -> bool:
     return True
 
 
+def _is_silly_exchange(question: str, reply: str) -> bool:
+    if SILLY_QUESTION_RE.search(question):
+        return True
+    if re.search(r"\bkwak\b", reply or "", re.I):
+        return True
+    return False
+
+
+def _opportunity_sort_key(item: UnansweredQuestion) -> tuple:
+    question = item.question_text.strip()
+    reply = (item.agent_reply_text or "").strip()
+    if _is_silly_exchange(question, reply):
+        return (999, 999, 999, 999, 999, 0, 1.0)
+
+    status_rank = STATUS_PRIORITY.get(item.status, 99)
+    topic_bonus = 0 if FESTIVAL_TOPIC_RE.search(question) else 1
+    off_topic_penalty = 1 if OFF_TOPIC_TECH_RE.search(question) else 0
+    misdirected_penalty = 1 if MISDIRECTED_TOPIC_RE.search(question) else 0
+    reply_bonus = 0 if reply else 1
+    similarity = item.similarity_score if item.similarity_score is not None else 1.0
+    return (status_rank, topic_bonus, off_topic_penalty, misdirected_penalty, reply_bonus, -len(question), similarity)
+
+
 def _select_opportunity_examples(
     unanswered: list[UnansweredQuestion],
     *,
     limit: int = 4,
 ) -> list[UnansweredQuestion]:
-    candidates = [
-        item
-        for item in unanswered
-        if item.question_text.strip() and _is_substantive_question(item.question_text)
-    ]
-    if not candidates:
-        candidates = [item for item in unanswered if item.question_text.strip()]
+    with_text = [item for item in unanswered if item.question_text.strip()]
+    substantive = [item for item in with_text if _is_substantive_question(item.question_text)]
+    serious = [item for item in substantive if not _is_silly_exchange(
+        item.question_text, item.agent_reply_text or ""
+    )]
 
-    def sort_key(item: UnansweredQuestion) -> tuple:
-        status_rank = STATUS_PRIORITY.get(item.status, 99)
-        reply_bonus = 0 if (item.agent_reply_text or "").strip() else 1
-        similarity = item.similarity_score if item.similarity_score is not None else 1.0
-        return (status_rank, reply_bonus, -len(item.question_text), similarity)
-
-    candidates.sort(key=sort_key)
-    return candidates[:limit]
+    pool = serious or substantive or with_text
+    ranked = sorted(pool, key=_opportunity_sort_key)
+    return ranked[:limit]
 
 
-def _render_opportunity_cards(examples: list[UnansweredQuestion]) -> str:
+def _sanitize_reply_for_display(text: str, max_len: int = 380) -> str:
+    cleaned = " ".join(text.split())
+    cleaned = URL_RE.sub("[link]", cleaned)
+    return _truncate(cleaned, max_len)
+
+
+def _render_opportunity_cards(
+    examples: list[UnansweredQuestion],
+    start: int,
+    count: int,
+) -> str:
     cards: list[str] = []
-    for index in range(4):
-        if index < len(examples):
-            item = examples[index]
-            question = _escape_html(_truncate(item.question_text.strip(), 160))
-            reply = (item.agent_reply_text or "").strip()
-            if reply:
-                answer = _escape_html(_truncate(reply, 220))
-            elif item.status == "no_reply":
-                answer = "Geen antwoord gegeven"
-            else:
-                answer = "—"
-            cards.append(
-                f'<div class="opportunity">'
-                f'<div class="olbl">Vraag</div>'
-                f'<div class="oquestion">"{question}"</div>'
-                f'<div class="olbl">Huidig antwoord</div>'
-                f'<div class="oanswer">{answer}</div>'
-                f'<div class="olbl">Nieuw antwoord</div>'
-                f'<div class="oblank"></div>'
-                f"</div>"
-            )
+    for offset in range(count):
+        idx = start + offset
+        if idx >= len(examples):
+            break
+        item = examples[idx]
+        question = _escape_html(_truncate(item.question_text.strip(), 200))
+        reply = (item.agent_reply_text or "").strip()
+        if reply:
+            answer = _escape_html(_sanitize_reply_for_display(reply))
+        elif item.status == "no_reply":
+            answer = "Geen antwoord gegeven"
         else:
-            cards.append(
-                '<div class="opportunity">'
-                '<div class="olbl">Vraag</div>'
-                '<div class="oquestion">&nbsp;</div>'
-                '<div class="olbl">Huidig antwoord</div>'
-                '<div class="oanswer">&nbsp;</div>'
-                '<div class="olbl">Nieuw antwoord</div>'
-                '<div class="oblank"></div>'
-                "</div>"
-            )
-    return "\n      ".join(cards)
+            answer = "—"
+        cards.append(
+            f'<div class="opportunity">'
+            f'<div class="olbl">Vraag</div>'
+            f'<div class="oquestion">"{question}"</div>'
+            f'<div class="olbl">Huidig antwoord</div>'
+            f'<div class="oanswer">{answer}</div>'
+            f'<div class="olbl">Nieuw antwoord</div>'
+            f'<div class="oblank"></div>'
+            f"</div>"
+        )
+    return "\n      ".join(cards) if cards else ""
 
 
 def _build_unanswered_insight(

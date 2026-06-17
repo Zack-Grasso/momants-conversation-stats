@@ -64,3 +64,15 @@ def test_resolve_event_name_falls_back_when_momants_lookup_fails():
 
     assert name == "Agent 12345678"
     assert missing == ["event_name"]
+
+
+def test_sentiment_summary_resolves_dominant_mood_label():
+    db = MagicMock()
+    db.execute.return_value.all.return_value = [("positive", 3)]
+    db.scalars.return_value.all.return_value = ['[{"label": "joy", "score": 0.9}]']
+    service = ReportService(db)
+
+    polarity, mood = service._sentiment_summary("agent-123")
+
+    assert polarity == "positive"
+    assert mood == "vreugde"

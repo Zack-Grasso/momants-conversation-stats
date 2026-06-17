@@ -335,14 +335,22 @@
   .action .abody { font-size: 13.5px; line-height: 1.65; color: #444; }
 
   /* improvement opportunities */
+  .opportunities-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    flex: 1;
+    min-height: 0;
+  }
   .opportunity {
     border-radius: 12px;
-    padding: 16px 18px;
+    padding: 18px 20px;
     border: 1px solid var(--card-border);
     background: var(--card);
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
+    flex: 1 1 0;
     min-height: 0;
   }
   .opportunity .olbl {
@@ -351,26 +359,34 @@
     text-transform: uppercase;
     font-weight: 700;
     color: #999;
+    flex-shrink: 0;
   }
   .opportunity .oquestion {
-    font-size: 13.5px;
+    font-size: 14px;
     font-weight: 600;
     font-style: italic;
     color: var(--navy);
     line-height: 1.45;
+    flex-shrink: 0;
   }
   .opportunity .oanswer {
-    font-size: 12.5px;
-    line-height: 1.5;
+    font-size: 13px;
+    line-height: 1.55;
     color: #555;
     background: #fff;
     border: 1px solid #e8e8e4;
     border-radius: 8px;
-    padding: 10px 12px;
+    padding: 12px 14px;
+    flex-shrink: 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 5;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: break-word;
   }
   .opportunity .oblank {
     flex: 1;
-    min-height: 52px;
+    min-height: 80px;
     background: #fff;
     border: 1px dashed #d8d8d4;
     border-radius: 8px;
@@ -473,7 +489,7 @@
       </div>
     </div>
   </div>
-  <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>1 / 8</span></div>
+  <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>1 / 9</span></div>
 </section>
 
 <section class="slide">
@@ -538,7 +554,7 @@
       </div>
     </div>
   </div>
-  <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>2 / 8</span></div>
+  <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>2 / 9</span></div>
 </section>
 
 <section class="slide">
@@ -594,7 +610,7 @@
     <strong>Key Insight</strong> · {{dominant_channel}} is het dominante kanaal (<span class="tag">{{dominant_channel_pct}}%</span>) met het hoogste sentiment ({{highest_sentiment_channel}} · {{highest_sentiment_score}}★).
     De {{peak_period_label}} om {{peak_hour}} vraagt om voldoende agent-capaciteit of proactieve FAQ-content op dat moment.
   </div>
-  <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>3 / 8</span></div>
+  <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>3 / 9</span></div>
 </section>
 
 <section class="slide">
@@ -641,7 +657,7 @@
       </svg>
     </div>
   </div>
-  <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>4 / 8</span></div>
+  <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>4 / 9</span></div>
 </section>
 
 <section class="slide">
@@ -688,7 +704,7 @@
       </div>
     </div>
   </div>
-  <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>5 / 8</span></div>
+  <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>5 / 9</span></div>
 </section>
 
 <section class="slide">
@@ -733,7 +749,7 @@
       <strong>Key Insight</strong> · {{unanswered_insight}}
     </div>
   </div>
-  <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>6 / 8</span></div>
+  <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>6 / 9</span></div>
 </section>
 
 <section class="slide">
@@ -775,7 +791,7 @@
       <strong>Key Insight</strong> · {{answered_questions_insight}}
     </div>
   </div>
-  <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>7 / 8</span></div>
+  <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>7 / 9</span></div>
 </section>
 
 <section class="slide">
@@ -811,11 +827,48 @@
     <div class="insight">
       <strong>Zie de kansen als het volgende</strong> · De kansen die we zien waar verbetering door kan komen. Loop de vragen langs waar de agent nu geen goed antwoord op had — vul zelf een beter antwoord in.
     </div>
-    <div class="g2" style="flex:1;min-height:0">
-      {{opportunity_cards}}
+    <div class="opportunities-stack">
+      {{opportunity_cards_page1}}
     </div>
   </div>
-  <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>8 / 8</span></div>
+  <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>8 / 9</span></div>
+</section>
+
+<section class="slide">
+  <div class="topbar">
+    <div class="logo"><svg class="mom-logo" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 429.8 59.7">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: currentColor;
+      }
+    </style>
+  </defs>
+  
+  <g>
+    <g id="Laag_1">
+      <g>
+        <path class="cls-1" d="M204.8,11.6c-1.4,0-2.6.1-3.8.3-9.4,1.8-12.8,13.3-12.8,13.3,0,0,.2-1.2-1.3-5v-.3c-2.4-5.4-6.9-8.1-13.7-8.3-13.8.2-16.8,12.3-16.8,12.3v-10.8h-11.4v43h11.4v-22.4c0-6.8,7-12.2,13.8-12.2s6.9,2.7,6.9,9.1v25.4h11.4v-20.2c0-9.2,6.6-14.4,13.8-14.4s7,2.7,7,9.1v25.4h11.4v-25.4c0-18.7-14.5-19.2-16.1-19.2Z"/>
+        <path class="cls-1" d="M64.2,11.6c-1.4,0-2.6.1-3.8.3-9.4,1.8-12.8,13.3-12.8,13.3,0,0,.2-1.2-1.3-5v-.3c-2.4-5.4-6.9-8.1-13.7-8.3-13.8.2-16.8,12.3-16.8,12.3v-10.8H4.5v43h11.4v-22.4c0-6.8,7-12.2,13.8-12.2s6.9,2.7,6.9,9.1v25.4h11.4v-20.2c0-9.2,6.6-14.4,13.8-14.4s7,2.7,7,9.1v25.4h11.4v-25.4c0-18.7-14.5-19.2-16.1-19.2Z"/>
+        <path class="cls-1" d="M317.7,11.6c-13.5,0-16,12.4-16,12.4v-10.8h-11.4v43h11.4c0-1.4.5-12.2.5-20.8s7.2-13.8,14.2-13.8,7.8,2.3,7.8,9.1v25.4h11.4v-25.4c0-17.3-12.5-19.2-17.8-19.2Z"/>
+        <path class="cls-1" d="M270,13.1h-32.8s0,10.1,0,10.1c8.3-.5,18.8-3.7,24.4-5.5,2.1-.6,3.4-1.1,3.8-1.1h.2s0,8.6,0,8.6c-.2,0-.5-.1-.7-.2-5.2-1.1-11.3-.6-17.2,1.3-5.8,1.9-10.8,5.1-14,8.9-3.7,4.4-4.7,9.4-2.9,13.7,1.8,4.3,6.2,7.4,12.1,8.6,1.8.4,3.8.6,5.9.6s5.2-.3,7.8-.9c4.2-1,7.2-2.8,9-4.2v3.2h11.6s0-35.5,0-35.5c0-5.1-2.4-7.6-7.3-7.6ZM265.6,37.1v5.3l-.2.3c-2.1,2.1-5.2,3.9-8.7,5.1-4,1.3-8.2,1.6-11.5,1-1.5-.3-4.2-1.1-5-3-.8-1.8.6-3.9,1.6-5,2-2.4,5.5-4.6,9.4-5.9,3.9-1.3,8.2-1.6,11.5-1,.6.1,1.8.4,2.9,1h0v2.2Z"/>
+        <path class="cls-1" d="M407,29.6c-8.2-1.3-10.7-2.5-10.7-5.1s2.2-4,8.7-4,9,1.7,9.1,6.1h9.6s.4-11.3-12.3-14.3c-.1,0-.3,0-.4,0-1.8-.4-3.8-.6-6.1-.6-11.6,0-18.6,5-18.6,13.2s7.6,12.2,18.9,14c7.5,1.2,10.2,2.2,10.2,5.6s-2.9,4.3-9.3,4.3-10.5-1.2-10.5-7.4h-11.2c.1,15.1,16.6,16.2,21.7,16.2,9.9,0,20.5-3.5,20.5-13.1s-9.4-13.2-19.6-14.8Z"/>
+        <path class="cls-1" d="M362,49.6v-27h.2s13.7,0,13.7,0v-9.3h-15.2s1.3-2.7,1.3-10.5h-11.4v10.5h-5.6v9.6h5.6v25.9c0,5.1,2.4,7.5,7.2,7.5h19.9v-9.4c-9.7.2-15.3,2.6-15.4,2.6h-.3Z"/>
+        <path class="cls-1" d="M112.7,11c-13.3,0-24.1,10.5-24.1,23.6.8,7.6,3.6,13.1,7.3,16.9,1.8,1.7,3.9,3.2,6.2,4.3,11.7,5.3,27.5-.3,32.9-12,1.2-2.8,1.9-5.9,1.9-9.1,0-13-10.8-23.6-24.1-23.6ZM125.8,35.2c-1.4,2.4-3.1,4.5-5.3,6.3-2.2,1.8-4.7,3-7.5,3.8-2.7.7-5.2.9-7.6.4-2.4-.5-4.4-1.5-6.1-3.1-1.7-1.6-2.9-3.6-3.5-6-.7-2.5-.7-4.8,0-7.1s1.9-4.2,3.6-5.8c1.8-1.7,4-2.9,6.7-3.6,2.8-.8,5.6-1,8.4-.6,2.8.4,5.4,1.3,7.7,2.7,2.4,1.4,5.7,4.5,6,5.4.3.9-1.1,5.2-2.4,7.7Z"/>
+      </g>
+    </g>
+  </g>
+</svg></div>
+    <div class="doc">{{event_name}} · Conversation Analysis</div>
+  </div>
+  <div class="eyebrow">Kansen</div>
+  <h1>Waar kan de agent beter? <span style="font-size:22px;font-weight:600;color:var(--muted)">(vervolg)</span></h1>
+  <div class="body" style="padding-top:14px">
+    <div class="opportunities-stack">
+      {{opportunity_cards_page2}}
+    </div>
+  </div>
+  <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>9 / 9</span></div>
 </section>
 
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
