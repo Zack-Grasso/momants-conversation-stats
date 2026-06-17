@@ -310,6 +310,47 @@ def hourly_conversation_averages(conversations: list[ConversationLike]) -> dict[
     return {hour: round(count / days, 1) for hour, count in raw.items()}
 
 
+TIME_BUCKET_ORDER = ("kantooruren", "na_kantooruren", "nacht", "weekend")
+TIME_BUCKET_LABELS = {
+    "kantooruren": "Tijdens kantooruren",
+    "na_kantooruren": "Na kantooruren",
+    "nacht": "Nacht",
+    "weekend": "Weekend",
+}
+
+
+def classify_conversation_time_bucket(value: datetime) -> str:
+    """Bucket a conversation start into office-hours segments (Europe/Amsterdam when tz-aware)."""
+    dt = value
+    if dt.tzinfo is not None:
+        try:
+            from zoneinfo import ZoneInfo
+
+            dt = dt.astimezone(ZoneInfo("Europe/Amsterdam"))
+        except Exception:
+            pass
+
+    weekday = dt.weekday()
+    hour = dt.hour
+    if weekday >= 5:
+        return "weekend"
+    if 9 <= hour < 17:
+        return "kantooruren"
+    if 17 <= hour < 22:
+        return "na_kantooruren"
+    return "nacht"
+
+
+def conversation_time_buckets(conversations: list[ConversationLike]) -> dict[str, int]:
+    counts: Counter[str] = Counter()
+    for conversation in conversations:
+        start = conversation_start(conversation)
+        if start is None:
+            continue
+        counts[classify_conversation_time_bucket(start)] += 1
+    return {key: counts.get(key, 0) for key in TIME_BUCKET_ORDER if counts.get(key, 0) > 0}
+
+
 def aggregate_sentiment_arc(metrics: list[MetricsLike], max_index: int = 10) -> list[float]:
     buckets: dict[int, list[float]] = defaultdict(list)
     for metric in metrics:

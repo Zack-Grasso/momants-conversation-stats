@@ -5,6 +5,7 @@ from app.utils.report_charts import (
     daily_volume_chart_svg,
     emotion_timeline_chart_svg,
     hourly_bars_chart_svg,
+    office_hours_pie_chart_svg,
     sentiment_arc_chart_svg,
 )
 from app.utils.report_data import EmotionTimeline, EMOTION_LABEL_NL
@@ -18,6 +19,7 @@ def test_template_contains_dynamic_chart_placeholders():
     assert "{{chart_slide2_inner}}" in template
     assert "{{chart_slide3_inner}}" in template
     assert "{{chart_slide4_inner}}" in template
+    assert "{{chart_slide5_inner}}" in template
     assert "WhatsApp is het dominante kanaal" not in template
     # Channels are rendered conditionally via fragments (Instagram hidden when empty).
     assert "{{channel_pills}}" in template
@@ -27,7 +29,7 @@ def test_template_contains_dynamic_chart_placeholders():
     assert "Gespreksdiepte" not in template
     assert "{{stats_conversations_total}}" in template
     assert "{{stats_total_value}}" in template
-    assert template.count("/ 11") == 11
+    assert template.count("/ 9") == 9
 def test_select_x_label_indices_drops_crowded_end_labels():
     from app.utils.report_charts import _select_x_label_indices
 
@@ -97,3 +99,16 @@ def test_emotion_timeline_chart_svg_empty_state():
     svg = emotion_timeline_chart_svg(None, EMOTION_LABEL_NL)
 
     assert "Geen emotiedata" in svg
+
+
+def test_office_hours_pie_chart_svg_renders_segments():
+    svg = office_hours_pie_chart_svg(
+        {"kantooruren": 40, "na_kantooruren": 30, "nacht": 20, "weekend": 10}
+    )
+
+    assert "<path" in svg
+    assert "Tijdens kantooruren" in svg
+    assert "40%" in svg or "40.0%" in svg or "40,0%" in svg or "40%" in svg
+    assert "Na kantooruren" in svg
+    assert "Nacht" in svg
+    assert "Weekend" in svg

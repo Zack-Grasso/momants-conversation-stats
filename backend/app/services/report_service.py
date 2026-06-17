@@ -18,6 +18,7 @@ from app.services.insights_service import InsightsService
 from app.utils.report_charts import (
     daily_volume_chart_svg,
     hourly_bars_chart_svg,
+    office_hours_pie_chart_svg,
     sentiment_arc_chart_svg,
 )
 from app.utils.report_data import (
@@ -26,6 +27,7 @@ from app.utils.report_data import (
     aggregate_sentiment_arc,
     apply_momants_stats_fallback,
     build_channel_fragments,
+    conversation_time_buckets,
     daily_conversation_counts,
     dominant_channel,
     fetch_momants_report_stats,
@@ -391,18 +393,17 @@ class ReportService:
         channel_fragments = build_channel_fragments(dict(channel_counts), channel_sentiments, total_conversations)
 
         arc = aggregate_sentiment_arc(metrics)
-        opportunity_examples = _select_opportunity_examples(unanswered, limit=4)
+        time_buckets = conversation_time_buckets(conversations)
         fragments = {
             "chart_slide2_inner": daily_volume_chart_svg(daily_counts, peak_day_dt),
             "chart_slide3_inner": hourly_bars_chart_svg(hour_counts, peak_hour_int),
             "chart_slide4_inner": sentiment_arc_chart_svg(arc, avg_start, avg_end),
+            "chart_slide5_inner": office_hours_pie_chart_svg(time_buckets),
             "unanswered_examples_page1": _render_unanswered_examples(examples, 0, 18),
             "unanswered_examples_page2": _render_unanswered_examples_page2(examples),
             "answered_questions_grid": _render_answered_questions(
                 answered_ranked, 0, 18, compact=True, tiny=True
             ),
-            "opportunity_cards_page1": _render_opportunity_cards(opportunity_examples, 0, 1),
-            "opportunity_cards_page2": _render_opportunity_cards(opportunity_examples, 1, 3),
             **channel_fragments,
         }
 

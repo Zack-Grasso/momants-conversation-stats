@@ -432,3 +432,89 @@ def emotion_timeline_chart_svg(
 
     _plot_frame(parts, plot_left=plot_left, plot_right=plot_right, plot_top=plot_top, plot_bottom=plot_bottom)
     return "\n        ".join(parts)
+
+
+TIME_BUCKET_COLORS = {
+    "kantooruren": "#0f766e",
+    "na_kantooruren": "#c5e86c",
+    "nacht": "#151515",
+    "weekend": "#94a3b8",
+}
+
+
+def _pie_slice_path(cx: float, cy: float, radius: float, start_deg: float, end_deg: float) -> str:
+    import math
+
+    span = end_deg - start_deg
+    if span <= 0:
+        return ""
+    if span >= 360:
+        span = 359.99
+        end_deg = start_deg + span
+
+    start = math.radians(start_deg)
+    end = math.radians(end_deg)
+    x1 = cx + radius * math.cos(start)
+    y1 = cy + radius * math.sin(start)
+    x2 = cx + radius * math.cos(end)
+    y2 = cy + radius * math.sin(end)
+    large_arc = 1 if span > 180 else 0
+    return (
+        f"M {cx:.2f} {cy:.2f} L {x1:.2f} {y1:.2f} "
+        f"A {radius} {radius} 0 {large_arc} 1 {x2:.2f} {y2:.2f} Z"
+    )
+
+
+def office_hours_pie_chart_svg(
+    buckets: dict[str, int],
+    *,
+    labels: dict[str, str] | None = None,
+    order: tuple[str, ...] = ("kantooruren", "na_kantooruren", "nacht", "weekend"),
+) -> str:
+    from app.utils.report_data import TIME_BUCKET_LABELS
+
+    label_map = labels or TIME_BUCKET_LABELS
+    total = sum(buckets.get(key, 0) for key in order)
+    if total <= 0:
+        return (
+            '<text x="240" y="170" font-family="Inter" font-size="14" fill="#999" '
+            'text-anchor="middle">Geen gespreksdata beschikbaar</text>'
+        )
+
+    cx, cy, radius = 170.0, 165.0, 115.0
+    angle = -90.0
+    parts: list[str] = []
+
+    for key in order:
+        value = buckets.get(key, 0)
+        if value <= 0:
+            continue
+        sweep = 360.0 * value / total
+        path = _pie_slice_path(cx, cy, radius, angle, angle + sweep)
+        if path:
+            color = TIME_BUCKET_COLORS.get(key, "#cbd5e1")
+            parts.append(f'<path d="{path}" fill="{color}" stroke="#fff" stroke-width="2"/>')
+        angle += sweep
+
+    legend_x = 320.0
+    legend_y = 95.0
+    for key in order:
+        value = buckets.get(key, 0)
+        if value <= 0:
+            continue
+        pct = round(100 * value / total, 1)
+        color = TIME_BUCKET_COLORS.get(key, "#cbd5e1")
+        name = escape(label_map.get(key, key))
+        parts.append(f'<rect x="{legend_x:.1f}" y="{legend_y:.1f}" width="12" height="12" rx="2" fill="{color}"/>')
+        parts.append(
+            f'<text x="{legend_x + 18:.1f}" y="{legend_y + 10:.1f}" font-family="Inter" font-size="12" '
+            f'fill="#444">{name}</text>'
+        )
+        count_label = f"{value:,}".replace(",", ".")
+        parts.append(
+            f'<text x="{legend_x + 18:.1f}" y="{legend_y + 26:.1f}" font-family="Inter" font-size="11" '
+            f'fill="#888">{pct:g}% · {count_label}</text>'
+        )
+        legend_y += 44.0
+
+    return "\n        ".join(parts)

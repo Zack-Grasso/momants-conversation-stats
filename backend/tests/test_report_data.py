@@ -9,6 +9,8 @@ from app.utils.report_data import (
     aggregate_sentiment_arc,
     build_action_bodies,
     build_emotion_timeline_insight,
+    classify_conversation_time_bucket,
+    conversation_time_buckets,
     daily_conversation_counts,
     daily_counts_from_momants_stats,
     dominant_channel,
@@ -270,3 +272,36 @@ def test_fetch_momants_report_stats_fallback_on_api_error():
     assert result.hours_saved is None
     assert result.pct_outside_office is None
     assert result.total_value_creation is None
+
+
+def test_classify_conversation_time_bucket():
+    office = datetime(2026, 3, 3, 10, 0, tzinfo=timezone.utc)
+    evening = datetime(2026, 3, 3, 19, 0, tzinfo=timezone.utc)
+    night = datetime(2026, 3, 3, 23, 0, tzinfo=timezone.utc)
+    weekend = datetime(2026, 3, 7, 14, 0, tzinfo=timezone.utc)
+
+    assert classify_conversation_time_bucket(office) == "kantooruren"
+    assert classify_conversation_time_bucket(evening) == "na_kantooruren"
+    assert classify_conversation_time_bucket(night) == "nacht"
+    assert classify_conversation_time_bucket(weekend) == "weekend"
+
+
+def test_conversation_time_buckets_groups_conversations():
+    day = datetime(2026, 3, 3, 10, 0, tzinfo=timezone.utc)
+    evening = datetime(2026, 3, 3, 19, 0, tzinfo=timezone.utc)
+
+    conversations = [
+        SimpleNamespace(
+            created_at=day,
+            messages=[SimpleNamespace(source_created_at=day, created_at=day)],
+        ),
+        SimpleNamespace(
+            created_at=evening,
+            messages=[SimpleNamespace(source_created_at=evening, created_at=evening)],
+        ),
+    ]
+
+    buckets = conversation_time_buckets(conversations)
+
+    assert buckets["kantooruren"] == 1
+    assert buckets["na_kantooruren"] == 1
