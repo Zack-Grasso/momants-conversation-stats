@@ -100,12 +100,18 @@ def format_dutch_int(value: float | int) -> str:
     return f"{number:,}".replace(",", ".")
 
 
-def format_eur(value: float | int | None) -> str:
+def format_eur(value: float | int | None, *, compact: bool = True) -> str:
     if value is None:
         return "—"
     amount = float(value)
-    if abs(amount) >= 1_000_000:
-        return f"€{format_report_num(amount / 1_000_000, 1)}m"
-    if abs(amount) >= 1_000:
-        return f"€{format_report_num(amount / 1_000, 0)}k"
-    return f"€{format_report_num(amount, 0)}"
+    if compact:
+        if abs(amount) >= 1_000_000:
+            return f"€{format_report_num(amount / 1_000_000, 1)}m"
+        if abs(amount) >= 1_000:
+            return f"€{format_report_num(amount / 1_000, 0)}k"
+        return f"€{format_report_num(amount, 0)}"
+    if amount == int(amount):
+        return f"€{format_dutch_int(amount)}"
+    whole = int(amount)
+    cents = int(round((amount - whole) * 100))
+    return f"€{format_dutch_int(whole)},{cents:02d}"

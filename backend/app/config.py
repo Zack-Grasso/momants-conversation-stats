@@ -79,6 +79,19 @@ class Settings(BaseSettings):
     # Directory where pipeline-generated rapport PDFs are stored for preview/download.
     report_exports_dir: str = "/app/data/reports"
 
+    # Weekly report subsystem (isolated from main DATABASE_URL)
+    weekly_database_url: str = (
+        "postgresql+psycopg://conversation_stats:conversation_stats@localhost:5432/weekly_reports"
+    )
+    weekly_reports_dir: str = "/app/data/weekly-reports"
+    weekly_unanswered_enabled: bool = True
+    weekly_unanswered_days: int = 7
+    weekly_unanswered_cron: str = "0 6 * * 1"
+    weekly_unanswered_max_conversations: int = 500
+    # When set, run-all (and the weekly scheduler) process only this agent. Leave empty for all agents.
+    weekly_unanswered_agent_id: str = ""
+    slack_weekly_report_channel_id: str = "C0BC172EV6C"
+
     # Slack notifications: DM the user who requested a rapport run at each milestone.
     # Requires a bot token (xoxb-...) with scopes: users:read.email, chat:write, im:write.
     slack_bot_token: str = ""

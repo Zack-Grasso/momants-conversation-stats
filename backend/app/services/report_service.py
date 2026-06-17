@@ -484,22 +484,9 @@ class ReportService:
 
     def render_pdf(self, agent_id: str, event_name: str | None = None) -> bytes:
         """Render the report HTML and convert it to PDF via the Gotenberg (Chromium) service."""
-        html = self.render_html(agent_id, event_name)
-        settings = get_settings()
-        url = f"{settings.gotenberg_url.rstrip('/')}/forms/chromium/convert/html"
-        files = {"files": ("index.html", html.encode("utf-8"), "text/html")}
-        # printBackground keeps the styled background/colours; waitDelay lets the external
-        # Google Fonts load before Chromium captures the page.
-        data = {
-            "printBackground": "true",
-            "preferCssPageSize": "true",
-            # Allow the external fonts + Lucide icon script to finish rendering before capture.
-            "waitDelay": "3s",
-        }
-        with httpx.Client(timeout=settings.gotenberg_timeout_seconds) as client:
-            response = client.post(url, files=files, data=data)
-            response.raise_for_status()
-            return response.content
+        from app.utils.report_pdf import html_to_pdf
+
+        return html_to_pdf(self.render_html(agent_id, event_name))
 
 
 def _escape_html(value: str) -> str:

@@ -74,6 +74,36 @@ def scheduler_health(response: Response, agent_id: str | None = Query(default=No
     }
 
 
+@router.get("/health/weekly")
+def weekly_health(response: Response) -> dict:
+    from app.cache import get_cache_client
+    from app.weekly.database import WeeklySessionLocal
+
+    db_status = "ok"
+    db = WeeklySessionLocal()
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception:
+        db_status = "error"
+    finally:
+        db.close()
+
+    heartbeat = None
+    try:
+        raw = get_cache_client().get("weekly:heartbeat")
+        if raw:
+            import json
+
+            heartbeat = json.loads(raw)
+    except Exception:
+        heartbeat = None
+
+    overall = "ok" if db_status == "ok" else "degraded"
+    if db_status != "ok":
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    return {"status": overall, "weekly_database": db_status, "heartbeat": heartbeat}
+
+
 @router.get("/health/status")
 def system_status(response: Response, agent_id: str | None = Query(default=None)) -> dict:
     db = SessionLocal()

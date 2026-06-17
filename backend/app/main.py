@@ -15,6 +15,7 @@ from app.api import api_router
 from app.config import get_settings
 from app.database import init_db
 from app.ml.model_registry import get_model_registry
+from app.weekly.database import init_weekly_db
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +24,8 @@ logger = logging.getLogger(__name__)
 async def lifespan(_: FastAPI):
     settings = get_settings()
     init_db()
-    if settings.preload_models and settings.app_role == "scheduler":
+    init_weekly_db()
+    if settings.preload_models and settings.app_role in ("scheduler", "weekly-scheduler"):
         logger.info("Preloading Hugging Face models into cache")
         get_model_registry().preload()
     yield

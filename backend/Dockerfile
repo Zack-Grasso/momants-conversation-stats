@@ -17,11 +17,12 @@ RUN pip install --no-cache-dir --default-timeout=300 \
 COPY app ./app
 COPY templates ./templates
 COPY scripts ./scripts
+COPY tests ./tests
 COPY crontab ./crontab
 COPY alembic.ini .
 COPY alembic ./alembic
 
-RUN chmod +x /app/scripts/scheduler-loop.sh
+RUN chmod +x /app/scripts/scheduler-loop.sh /app/scripts/weekly-scheduler-entry.sh
 
 ENV HF_HOME=/app/.cache/huggingface
 ENV HF_HUB_DISABLE_TELEMETRY=1

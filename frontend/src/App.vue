@@ -71,6 +71,9 @@ async function signOut() {
           <router-link to="/results" class="nav-link" :class="{ active: route.name === 'results' }">
             Results
           </router-link>
+          <router-link to="/reports/weekly" class="nav-link" :class="{ active: route.name === 'weekly-reports' }">
+            Weekly reports
+          </router-link>
         </nav>
       </header>
       <router-view />

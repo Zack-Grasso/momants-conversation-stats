@@ -17,6 +17,7 @@
     --card: #f5f5f3;
     --card-border: #e8e8e4;
     --white: #ffffff;
+    --purple: #6B21A8;
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -97,6 +98,11 @@
     border-radius: 4px;
     -webkit-box-decoration-break: clone;
     box-decoration-break: clone;
+  }
+
+  .hero-stat {
+    color: var(--purple);
+    font-weight: 800;
   }
 
   /* Lucide inline icons (rendered from <i data-lucide> by the script at the end). */
@@ -190,6 +196,31 @@
   .pill.wa { background: #e0f5e8; color: #1a5c35; }
   .pill.chat { background: #e8edff; color: #1a3591; }
   .pill.ig { background: #fde8f5; color: #8b1a6b; }
+
+  /* page 1 hero channel pills — compact icon, prominent count */
+  .hero-channels .pill {
+    gap: 10px;
+    padding: 12px 18px;
+    align-items: center;
+  }
+  .hero-channels .pill .ic,
+  .hero-channels .pill .pill-brand {
+    width: 1.1em;
+    height: 1.1em;
+    flex-shrink: 0;
+    vertical-align: middle;
+  }
+  .hero-channels .pill .pill-label {
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .hero-channels .pill .pill-count {
+    font-size: 34px;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -.02em;
+    margin-left: 2px;
+  }
 
   /* bar */
   .bar-track { background: #e8e8e4; border-radius: 4px; height: 9px; }
@@ -402,7 +433,7 @@
 
   /* ── PDF export: one slide == one page, sized to the 1440×830 card so Chromium
         (Gotenberg) never clips or splits a card across pages ── */
-  @page { size: 1440px 830px; margin: 0; }
+  @page { size: 1440px 830px landscape; margin: 0; }
   @media print {
     body { background: #ffffff; padding: 0; }
     .slide {
@@ -453,40 +484,31 @@
     <!-- left -->
     <div style="flex:1;min-width:0">
       <div class="eyebrow" style="margin-top:0">{{event_name}} · Conversation Analysis</div>
-      <h1>{{conversations_total}} gesprekken,<br><span class="hl">{{avg_sentiment_label}}</span> sentiment.</h1>
+      <h1><span class="hero-stat">{{conversations_total}}</span> gesprekken.</h1>
       <p style="font-size:16px;line-height:1.8;color:#444;margin-top:18px;max-width:680px">
-        In de periode {{date_range}} verwerkte de Momants-agent <strong>{{conversations_total}} gesprekken</strong>
-        via {{channels_sentence}} — goed voor {{messages_total}} berichten.
-        {{pct_resolved}}% werd opgelost zonder menselijke tussenkomst.
-        De gemiddelde stemming verbeterde van {{avg_start_stars}} naar {{avg_end_stars}} sterren gedurende een gesprek.
+        In de periode {{date_range}} verwerkte de Momants-agent <span class="hero-stat">{{conversations_total}} gesprekken</span>
+        via {{channels_sentence}} — goed voor <span class="hero-stat">{{messages_total}}</span> berichten.
+        <span class="hero-stat">{{pct_resolved}}%</span> werd zelfstandig opgelost.
       </p>
-      <div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap">
+      <div class="hero-channels" style="display:flex;gap:14px;margin-top:24px;flex-wrap:wrap">
         {{channel_pills}}
       </div>
     </div>
     <!-- right panel -->
     <div style="width:320px;flex-shrink:0;background:var(--accent);border:1px solid var(--accent-border);border-radius:14px;padding:28px 26px">
-      <div class="lbl" style="color:var(--accent-dark)">Totaal gesprekken</div>
-      <div style="font-size:56px;font-weight:800;color:#151515;letter-spacing:-.03em;line-height:1">{{conversations_total}}</div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px">
+        <div class="lbl" style="color:var(--accent-dark);margin-bottom:0">Totaal gesprekken</div>
+        <div class="lbl" style="color:var(--accent-dark);margin-bottom:0;text-align:right">Opgelost door AI</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:16px;margin-top:8px">
+        <div class="hero-stat" style="font-size:56px;letter-spacing:-.03em;line-height:1">{{conversations_total}}</div>
+        <div class="hero-stat" style="font-size:26px;letter-spacing:-.02em;line-height:1;text-align:right">{{pct_resolved}}%</div>
+      </div>
       <div style="font-size:13px;color:var(--accent-dark);margin-top:6px">{{date_range}}</div>
       <div style="border-top:1px solid var(--accent-border);margin:18px 0"></div>
-      <div class="lbl" style="color:var(--accent-dark)">Gem. sentiment</div>
-      <div style="font-size:34px;font-weight:800;color:#151515;letter-spacing:-.02em">{{avg_stars}} / 5 ★</div>
-      <div style="font-size:13px;color:var(--accent-dark);margin-top:4px">{{avg_delta_stars}} verbetering per gesprek</div>
-      <div style="border-top:1px solid var(--accent-border);margin:18px 0"></div>
-      <div class="lbl" style="color:var(--accent-dark)">Meest voorkomende stemming</div>
-      <div style="font-size:28px;font-weight:800;color:#151515;text-transform:capitalize">{{dominant_mood}}</div>
-      <div style="border-top:1px solid var(--accent-border);margin:18px 0"></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-        <div>
-          <div class="lbl" style="color:var(--accent-dark)">Opgelost</div>
-          <div style="font-size:28px;font-weight:800;color:#151515">{{pct_resolved}}%</div>
-        </div>
-        <div>
-          <div class="lbl" style="color:var(--accent-dark)">Doorverwezen</div>
-          <div style="font-size:28px;font-weight:800;color:#151515">{{pct_referred}}%</div>
-        </div>
-      </div>
+      <div class="lbl" style="color:var(--accent-dark)">Bespaarde support uren</div>
+      <div style="font-size:34px;font-weight:800;color:#151515;letter-spacing:-.02em;line-height:1">{{stats_hours_saved}}</div>
+      <div style="font-size:13px;color:var(--accent-dark);margin-top:6px">Bespaarde supportkosten: {{stats_support_cost_saved}}</div>
     </div>
   </div>
   <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>1 / 9</span></div>
@@ -534,9 +556,9 @@
         <div class="sub">Volledig zelfstandig opgelost</div>
       </div>
       <div class="card">
-        <div class="lbl"><i data-lucide="clock" class="ic"></i> Bespaarde uren</div>
+        <div class="lbl"><i data-lucide="clock" class="ic"></i> Bespaarde support uren</div>
         <div class="num">{{stats_hours_saved}}</div>
-        <div class="sub">Equivalentwaarde: {{stats_support_cost_saved}}</div>
+        <div class="sub">Bespaarde supportkosten: {{stats_support_cost_saved}}</div>
       </div>
       <div class="card green">
         <div class="lbl"><i data-lucide="trending-up" class="ic"></i> Totale waardecreatie</div>

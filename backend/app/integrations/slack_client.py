@@ -104,6 +104,35 @@ class SlackNotifier:
         self._post("chat.postMessage", {"channel": user_id, "text": text})
         return True
 
+    def post_message(self, channel_id: str, text: str) -> bool:
+        self._post("chat.postMessage", {"channel": channel_id, "text": text})
+        return True
+
+    def upload_file(
+        self,
+        channel_id: str,
+        file_bytes: bytes,
+        filename: str,
+        *,
+        initial_comment: str = "",
+    ) -> bool:
+        response = httpx.post(
+            f"{SLACK_API_BASE}/files.upload",
+            headers={"Authorization": f"Bearer {self._token}"},
+            data={
+                "channels": channel_id,
+                "initial_comment": initial_comment,
+                "filename": filename,
+            },
+            files={"file": (filename, file_bytes)},
+            timeout=self._timeout,
+        )
+        response.raise_for_status()
+        data = response.json()
+        if not data.get("ok"):
+            raise RuntimeError(f"Slack API 'files.upload' failed: {data.get('error', 'unknown_error')}")
+        return True
+
 
 def get_slack_notifier() -> SlackNotifier | None:
     """Return a configured Slack notifier, or None when Slack is disabled."""
@@ -174,4 +203,43 @@ def notify_milestone(
         return notifier.dm(email, text)
     except Exception:
         logger.exception("Failed to send Slack %s notification to %s", milestone, email)
+        return False
+
+
+def post_weekly_unanswered_bundle(
+    channel_id: str,
+    zip_path,
+    week_id: str,
+    summary: dict,
+) -> bool:
+    """Post weekly PDF zip bundle to a Slack channel. Best-effort."""
+    notifier = _get_notifier()
+    if notifier is None:
+        logger.debug("Slack disabled; skipping weekly bundle for %s", week_id)
+        return False
+    counts = summary.get("counts") or {}
+    agent_count = summary.get("agent_count", 0)
+    text = (
+        f":calendar: *Weekly unanswered report* — {week_id}\n"
+        f"{agent_count} agents · {counts.get('total', 0)} flagged questions "
+        f"({counts.get('no_reply', 0)} no reply · {counts.get('weak_answer', 0)} weak · "
+        f"{counts.get('not_answered', 0)} not answered)"
+    )
+    try:
+        from pathlib import Path
+
+        path = Path(zip_path)
+        if not path.is_file():
+            logger.warning("Weekly zip missing at %s", zip_path)
+            notifier.post_message(channel_id, text)
+            return False
+        notifier.upload_file(
+            channel_id,
+            path.read_bytes(),
+            f"unanswered-{week_id}.zip",
+            initial_comment=text,
+        )
+        return True
+    except Exception:
+        logger.exception("Failed to post weekly bundle to Slack channel %s", channel_id)
         return False

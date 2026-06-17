@@ -10,6 +10,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-conversation_stats}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-weekly-db.sh:/docker-entrypoint-initdb.d/init-weekly-db.sh
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-conversation_stats}"]
       interval: 5s
@@ -55,6 +56,7 @@ services:
       REDIS_CACHE_URL: redis://redis:6379/2
       REDIS_PUBSUB_URL: redis://redis:6379/3
       GOTENBERG_URL: http://gotenberg:3000
+      WEEKLY_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-conversation_stats}:${POSTGRES_PASSWORD:-conversation_stats}@db:5432/weekly_reports
       PRELOAD_MODELS: "false"
       HF_HOME: /app/.cache/huggingface
     ports:
@@ -62,6 +64,7 @@ services:
     volumes:
       - hf_cache:/app/.cache/huggingface
       - report_exports:/app/data/reports
+      - weekly_report_exports:/app/data/weekly-reports
     depends_on:
       db:
         condition: service_healthy
@@ -97,6 +100,31 @@ services:
   #       condition: service_healthy
   #     redis:
   #       condition: service_healthy
+
+  weekly-scheduler:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: /app/scripts/weekly-scheduler-entry.sh
+    env_file:
+      - .env
+    environment:
+      APP_ROLE: weekly-scheduler
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-conversation_stats}:${POSTGRES_PASSWORD:-conversation_stats}@db:5432/${POSTGRES_DB:-conversation_stats}
+      WEEKLY_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-conversation_stats}:${POSTGRES_PASSWORD:-conversation_stats}@db:5432/weekly_reports
+      REDIS_URL: redis://redis:6379/0
+      GOTENBERG_URL: http://gotenberg:3000
+      PRELOAD_MODELS: "true"
+      HF_HOME: /app/.cache/huggingface
+    volumes:
+      - hf_cache:/app/.cache/huggingface
+      - weekly_report_exports:/app/data/weekly-reports
+    depends_on:
+      db:
+        condition: service_healthy
+      gotenberg:
+        condition: service_started
 
   frontend:
     build:
@@ -141,3 +169,4 @@ volumes:
   redis_data:
   hf_cache:
   report_exports:
+  weekly_report_exports:

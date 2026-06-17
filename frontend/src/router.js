@@ -3,6 +3,8 @@ import { useAuth } from "./composables/useAuth";
 import RunPage from "./pages/RunPage.vue";
 import ResultsPage from "./pages/ResultsPage.vue";
 import ReportPreviewPage from "./pages/ReportPreviewPage.vue";
+import WeeklyReportsPage from "./pages/WeeklyReportsPage.vue";
+import WeeklyReportPreviewPage from "./pages/WeeklyReportPreviewPage.vue";
 import LoginPage from "./pages/LoginPage.vue";
 import OAuthCallbackPage from "./pages/OAuthCallbackPage.vue";
 
@@ -14,6 +16,8 @@ export const router = createRouter({
     { path: "/", name: "run", component: RunPage },
     { path: "/results", name: "results", component: ResultsPage },
     { path: "/reports/preview", name: "report-preview", component: ReportPreviewPage, meta: { fullscreen: true } },
+    { path: "/reports/weekly", name: "weekly-reports", component: WeeklyReportsPage },
+    { path: "/reports/weekly/preview", name: "weekly-report-preview", component: WeeklyReportPreviewPage, meta: { fullscreen: true } },
   ],
 });
 

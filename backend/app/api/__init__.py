@@ -15,6 +15,7 @@ from app.api import (
     slack,
     system,
 )
+from app.weekly.api.router import router as weekly_router
 from app.auth.deps import get_current_user
 
 api_router = APIRouter()
@@ -29,6 +30,7 @@ protected.include_router(ingest.router, prefix="/ingest", tags=["ingest"])
 protected.include_router(sentiment.router, prefix="/sentiment", tags=["sentiment"])
 protected.include_router(insights.router, prefix="/insights", tags=["insights"])
 protected.include_router(reports.router, prefix="/reports", tags=["reports"])
+protected.include_router(weekly_router, prefix="/weekly", tags=["weekly"])
 protected.include_router(pipeline.router, prefix="/pipeline", tags=["pipeline"])
 protected.include_router(jobs.router, prefix="/jobs", tags=["jobs"])
 protected.include_router(scheduler.router, prefix="/scheduler", tags=["scheduler"])

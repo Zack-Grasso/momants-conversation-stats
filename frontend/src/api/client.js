@@ -166,4 +166,22 @@ export const api = {
     const base = typeof window !== "undefined" ? window.location.origin : "";
     return `${base}/reports/preview?${params}`;
   },
+  getWeeklyRuns: (weekId = null) => {
+    const suffix = weekId ? `?week_id=${encodeURIComponent(weekId)}` : "";
+    return request(`/api/weekly/runs${suffix}`);
+  },
+  getWeeklySettings: () => request("/api/weekly/settings"),
+  updateWeeklySettings: (payload) =>
+    request("/api/weekly/settings", { method: "PUT", body: JSON.stringify(payload) }),
+  runWeeklyReports: () => request("/api/weekly/run", { method: "POST" }),
+  getWeeklyReportPdfUrl: (weekId, agentId, options = {}) => {
+    const params = new URLSearchParams();
+    if (options.inline) params.set("inline", "true");
+    const qs = params.toString();
+    return `${API_BASE}/api/weekly/runs/${encodeURIComponent(weekId)}/agents/${encodeURIComponent(agentId)}/pdf${qs ? `?${qs}` : ""}`;
+  },
+  getWeeklyReportPreviewUrl: (weekId, agentId) =>
+    `${API_BASE}/api/weekly/runs/${encodeURIComponent(weekId)}/agents/${encodeURIComponent(agentId)}/preview`,
+  getWeeklyReportZipUrl: (weekId) =>
+    `${API_BASE}/api/weekly/runs/${encodeURIComponent(weekId)}/zip`,
 };
