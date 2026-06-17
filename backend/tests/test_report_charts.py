@@ -26,6 +26,20 @@ def test_template_contains_dynamic_chart_placeholders():
     # Intent / conversation-depth reporting has been removed.
     assert "{{intent_breakdown_html}}" not in template
     assert "Gespreksdiepte" not in template
+def test_select_x_label_indices_drops_crowded_end_labels():
+    from app.utils.report_charts import _select_x_label_indices
+
+    def x_at(index: int) -> float:
+        return index * 10
+
+    # Last two candidate labels would sit only 20px apart; keep the final day only.
+    indices = _select_x_label_indices(40, x_at, max_labels=7, min_spacing=56)
+    assert indices[-1] == 39
+    assert len(indices) >= 2
+    for left, right in zip(indices, indices[1:]):
+        assert x_at(right) - x_at(left) >= 56 or right == 39
+
+
 def test_daily_volume_chart_svg_renders_polyline_and_peak_label():
     day = datetime(2026, 3, 1, tzinfo=timezone.utc)
     svg = daily_volume_chart_svg({day: 12, day.replace(day=2): 20}, day)
