@@ -61,6 +61,7 @@ services:
       - "8000:8000"
     volumes:
       - hf_cache:/app/.cache/huggingface
+      - report_exports:/app/data/reports
     depends_on:
       db:
         condition: service_healthy
@@ -139,3 +140,4 @@ volumes:
   postgres_data:
   redis_data:
   hf_cache:
+  report_exports:

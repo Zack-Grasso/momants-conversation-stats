@@ -148,11 +148,22 @@ export const api = {
     }
     return `${API_BASE}/api/reports/preview?${params}`;
   },
-  getReportPdfUrl: (agentId, eventName = null) => {
+  getReportPdfUrl: (agentId, eventName = null, options = {}) => {
     const params = new URLSearchParams({ agent_id: agentId });
     if (eventName) {
       params.set("event_name", eventName);
     }
+    if (options.inline) {
+      params.set("inline", "true");
+    }
     return `${API_BASE}/api/reports/pdf?${params}`;
+  },
+  getReportPreviewPageUrl: (agentId, eventName = null) => {
+    const params = new URLSearchParams({ agent_id: agentId });
+    if (eventName) {
+      params.set("event_name", eventName);
+    }
+    const base = typeof window !== "undefined" ? window.location.origin : "";
+    return `${base}/reports/preview?${params}`;
   },
 };

@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from "vue-router";
 import { useAuth } from "./composables/useAuth";
 import RunPage from "./pages/RunPage.vue";
 import ResultsPage from "./pages/ResultsPage.vue";
+import ReportPreviewPage from "./pages/ReportPreviewPage.vue";
 import LoginPage from "./pages/LoginPage.vue";
 import OAuthCallbackPage from "./pages/OAuthCallbackPage.vue";
 
@@ -12,6 +13,7 @@ export const router = createRouter({
     { path: "/oauth/callback", name: "oauth-callback", component: OAuthCallbackPage, meta: { public: true } },
     { path: "/", name: "run", component: RunPage },
     { path: "/results", name: "results", component: ResultsPage },
+    { path: "/reports/preview", name: "report-preview", component: ReportPreviewPage },
   ],
 });
 

@@ -40,7 +40,7 @@ def test_notify_milestone_sends_dm_when_enabled():
             "user@momants.ai",
             "agent-12345678",
             MILESTONE_PDF_READY,
-            link="https://report.momants.ai/results?agent_id=agent-12345678",
+            link="https://report.momants.ai/reports/preview?agent_id=agent-12345678",
         )
 
     assert sent is True
@@ -49,7 +49,7 @@ def test_notify_milestone_sends_dm_when_enabled():
     mock_post.assert_called_once()
     payload = mock_post.call_args.kwargs["json"]
     assert payload["channel"] == "U123"
-    assert "results?agent_id=agent-12345678" in payload["text"]
+    assert "reports/preview?agent_id=agent-12345678" in payload["text"]
 
 
 def test_notify_milestone_swallows_api_errors():

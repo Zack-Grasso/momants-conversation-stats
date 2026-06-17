@@ -141,7 +141,7 @@ def _format_message(
     if milestone == MILESTONE_INSIGHTS_DONE:
         return f":bar_chart: *Insights completed* for *{label}*."
     if milestone == MILESTONE_PDF_READY:
-        suffix = f" Download the PDF: {link}" if link else ""
+        suffix = f" Open preview: {link}" if link else ""
         return f":white_check_mark: *Rapport finished* for *{label}*.{suffix}"
     if milestone == MILESTONE_FAILED:
         detail = f" Error: {error}" if error else ""

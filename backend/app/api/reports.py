@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.schemas.report import ReportContextResponse
 from app.services.report_service import ReportService
+from app.utils.report_storage import load_report_pdf, save_report_pdf
 
 router = APIRouter()
 
@@ -43,23 +44,28 @@ def preview_report(
 def export_report_pdf(
     agent_id: str = Query(..., min_length=1, max_length=36),
     event_name: str | None = Query(default=None, max_length=255),
+    inline: bool = Query(default=False),
     service: ReportService = Depends(get_service),
 ) -> Response:
-    try:
-        pdf = service.render_pdf(agent_id, event_name)
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
-    except RuntimeError as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
-    except httpx.HTTPError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"PDF conversion service failed: {exc}",
-        ) from exc
+    pdf = load_report_pdf(agent_id)
+    if pdf is None:
+        try:
+            pdf = service.render_pdf(agent_id, event_name)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+        except RuntimeError as exc:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+        except httpx.HTTPError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"PDF conversion service failed: {exc}",
+            ) from exc
+        save_report_pdf(agent_id, pdf)
 
     filename = f"momants-report-{agent_id[:8]}.pdf"
+    disposition = "inline" if inline else "attachment"
     return Response(
         content=pdf,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": f'{disposition}; filename="{filename}"'},
     )

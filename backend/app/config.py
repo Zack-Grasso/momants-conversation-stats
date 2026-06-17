@@ -76,6 +76,8 @@ class Settings(BaseSettings):
     # Gotenberg (Chromium HTML->PDF) service for exporting the client report.
     gotenberg_url: str = "http://gotenberg:3000"
     gotenberg_timeout_seconds: float = 120.0
+    # Directory where pipeline-generated rapport PDFs are stored for preview/download.
+    report_exports_dir: str = "/app/data/reports"
 
     # Slack notifications: DM the user who requested a rapport run at each milestone.
     # Requires a bot token (xoxb-...) with scopes: users:read.email, chat:write, im:write.

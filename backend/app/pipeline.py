@@ -30,8 +30,10 @@ from app.services.agent_ingest_state_service import AgentIngestStateService
 from app.services.cache_warmer import warm_agent_cache
 from app.services.ingestion_service import IngestionService
 from app.services.insights_service import InsightsService
+from app.services.report_service import ReportService
 from app.services.job_concurrency import fail_orphaned_jobs
 from app.services.sentiment_service import SentimentService
+from app.utils.report_storage import save_report_pdf
 
 logger = logging.getLogger(__name__)
 
@@ -249,10 +251,20 @@ def _acquire_pipeline_lock(agent_id: str) -> bool:
     return False
 
 
-def _pdf_link(agent_id: str) -> str:
-    """Direct download link to the rapport PDF (login-gated, same-origin cookie)."""
+def _report_preview_link(agent_id: str) -> str:
+    """Public preview page for the pre-generated rapport PDF."""
     base = get_settings().app_base_url.rstrip("/")
-    return f"{base}/api/reports/pdf?agent_id={agent_id}"
+    return f"{base}/reports/preview?agent_id={agent_id}"
+
+
+def _persist_report_pdf(db: Session, agent_id: str) -> None:
+    """Render and store the rapport PDF so the preview page can serve it."""
+    try:
+        pdf = ReportService(db).render_pdf(agent_id)
+        save_report_pdf(agent_id, pdf)
+        logger.info("Stored report PDF for agent %s", agent_id)
+    except Exception:
+        logger.exception("Failed to store report PDF for agent %s", agent_id)
 
 
 def _safe_agent_name(client, agent_id: str) -> str | None:
@@ -328,12 +340,13 @@ def run_pipeline(
             warm_agent_cache(db, agent_id)
             _set_scheduler_heartbeat(agent_id)
             set_pipeline_run_state(agent_id, stage="ready")
+            _persist_report_pdf(db, agent_id)
             notify_milestone(
                 initiated_by,
                 agent_id,
                 MILESTONE_PDF_READY,
                 agent_name=agent_name,
-                link=_pdf_link(agent_id),
+                link=_report_preview_link(agent_id),
             )
             return
 
@@ -419,12 +432,13 @@ def run_pipeline(
         warm_agent_cache(db, agent_id)
         _set_scheduler_heartbeat(agent_id)
         set_pipeline_run_state(agent_id, stage="ready")
+        _persist_report_pdf(db, agent_id)
         notify_milestone(
             initiated_by,
             agent_id,
             MILESTONE_PDF_READY,
             agent_name=agent_name,
-            link=_pdf_link(agent_id),
+            link=_report_preview_link(agent_id),
         )
         logger.info(
             "Pipeline completed for agent %s (%s batches, %s listed, %s imported, %s skipped)",
@@ -492,12 +506,13 @@ def run_reanalyze(agent_id: str, initiated_by: str | None = None) -> None:
         warm_agent_cache(db, agent_id)
         _set_scheduler_heartbeat(agent_id)
         set_pipeline_run_state(agent_id, stage="ready")
+        _persist_report_pdf(db, agent_id)
         notify_milestone(
             initiated_by,
             agent_id,
             MILESTONE_PDF_READY,
             agent_name=agent_name,
-            link=_pdf_link(agent_id),
+            link=_report_preview_link(agent_id),
         )
         logger.info("Reanalyze completed for agent %s (%s conversations)", agent_id, len(conversation_ids))
     except Exception as exc:
