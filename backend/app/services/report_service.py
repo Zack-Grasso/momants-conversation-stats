@@ -57,20 +57,15 @@ from app.utils.report_data import (
     peak_hour_range,
     peak_period_label,
 )
-from app.utils.sentiment_report import (
-    build_sentiment_headline,
-    build_sentiment_page_html,
-    distribution_from_counts,
-)
 from app.utils.unanswered_report import (
     FESTIVAL_TOPIC_RE,
-    KNOWLEDGE_GAP_NONSENSE_COUNT,
     KNOWLEDGE_GAP_PAGE1_COUNT,
     KNOWLEDGE_GAP_PAGE2_COUNT,
     MISDIRECTED_TOPIC_RE,
     OFF_TOPIC_TECH_RE,
     SILLY_QUESTION_RE,
     TRIVIAL_QUESTION_RE,
+    build_knowledge_gap_info_html,
     build_knowledge_gap_insight,
     prepare_knowledge_gap_report,
     render_question_grid,
@@ -98,7 +93,6 @@ TEMPLATE_VARS = [
     "conversations_total",
     "avg_sentiment_label",
     "dominant_mood",
-    "sentiment_headline",
     "date_range",
     "messages_total",
     "pct_resolved",
@@ -202,7 +196,6 @@ class ReportService:
                 select(UnansweredQuestion)
                 .where(UnansweredQuestion.agent_id == agent_id)
                 .order_by(UnansweredQuestion.computed_at.desc())
-                .limit(100)
             ).all()
         )
 
@@ -235,13 +228,9 @@ class ReportService:
         set_num("avg_stars", avg_stars)
 
         dominant_polarity, dominant_mood = self._sentiment_summary(agent_id)
-        polarity_counts = self._polarity_counts(agent_id)
-        sentiment_dist = distribution_from_counts(polarity_counts)
-        emotion_rows = self._sentiment_emotion_rows(agent_id)
         sentiment_label = POLARITY_LABEL_NL.get(dominant_polarity) if dominant_polarity else None
         set_var("avg_sentiment_label", sentiment_label or _sentiment_label(avg_stars), required=False)
         set_var("dominant_mood", dominant_mood, required=False)
-        set_var("sentiment_headline", build_sentiment_headline(sentiment_dist), required=False)
 
         message_timestamps = all_message_timestamps(conversations)
         set_var("date_range", format_date_range(message_timestamps) if message_timestamps else None)
@@ -550,13 +539,12 @@ class ReportService:
         )
 
         active_channel_count = len(active_channels(dict(channel_counts)))
-        total_pages = 11
+        total_pages = 10
         channel_volume_start = 4
         channels_timing_page = 5
         bereikbaarheid_page = 6
         bereikbaarheid_channels_start = 7
-        sentiment_page = 8
-        unanswered_1_page = sentiment_page + 1
+        unanswered_1_page = bereikbaarheid_channels_start + 1
         unanswered_2_page = unanswered_1_page + 1
         value_page = unanswered_2_page + 1
 
@@ -565,7 +553,6 @@ class ReportService:
         set_var("page_num_total_volume", "3", required=False)
         set_var("page_num_channels_timing", str(channels_timing_page), required=False)
         set_var("page_num_bereikbaarheid", str(bereikbaarheid_page), required=False)
-        set_var("page_num_sentiment", str(sentiment_page), required=False)
         set_var("page_num_unanswered_1", str(unanswered_1_page), required=False)
         set_var("page_num_unanswered_2", str(unanswered_2_page), required=False)
         set_var("page_num_value", str(value_page), required=False)
@@ -613,31 +600,25 @@ class ReportService:
             ),
             "chart_slide2_inner": daily_volume_chart_svg(daily_counts, peak_day_dt),
             "chart_slide3_inner": hourly_bars_chart_svg(hour_counts, peak_hour_int),
-            "sentiment_page_content": build_sentiment_page_html(
-                sentiment_dist,
-                emotion_rows,
-                overview,
-                dominant_mood=dominant_mood,
-                intent_breakdown=overview.get("intent_breakdown") or {},
+            "knowledge_gap_info_html": build_knowledge_gap_info_html(
+                knowledge_gap,
+                unanswered_pct=overview.get("unanswered_pct"),
+                question_total=question_total,
             ),
             "chart_slide5_inner": office_hours_pie_chart_svg(time_buckets),
             "unanswered_examples_page1": render_question_grid(
                 list(knowledge_gap.substantive_questions),
                 0,
                 KNOWLEDGE_GAP_PAGE1_COUNT,
-                empty_label="Geen echte kennislacunes gevonden in deze periode.",
+                empty_label="Geen echte kennisgaten gevonden in deze periode.",
+                fill_slots=True,
             ),
             "unanswered_examples_page2": render_question_grid(
                 list(knowledge_gap.substantive_questions),
                 KNOWLEDGE_GAP_PAGE1_COUNT,
                 KNOWLEDGE_GAP_PAGE2_COUNT,
-                empty_label="Alle relevante kennislacunes staan op de vorige pagina.",
-            ),
-            "nonsense_examples": render_question_grid(
-                list(knowledge_gap.nonsense_questions),
-                0,
-                KNOWLEDGE_GAP_NONSENSE_COUNT,
-                empty_label="Geen niet-serieuze vragen gedetecteerd.",
+                empty_label="Alle relevante kennisgaten staan op de vorige pagina.",
+                fill_slots=True,
             ),
             "answered_questions_grid": _render_answered_questions(
                 answered_ranked, 0, 18, compact=True, tiny=True
@@ -665,15 +646,6 @@ class ReportService:
             .group_by(SentimentAnalysis.polarity)
         )
         return {polarity: count for polarity, count in self.db.execute(base_join).all()}
-
-    def _sentiment_emotion_rows(self, agent_id: str) -> list[tuple[str | None, str | None]]:
-        rows = self.db.execute(
-            select(SentimentAnalysis.polarity, SentimentAnalysis.emotions_json)
-            .join(Message, Message.id == SentimentAnalysis.message_id)
-            .join(Conversation, Conversation.id == Message.conversation_id)
-            .where(Conversation.agent_id == agent_id, SentimentAnalysis.polarity.is_not(None))
-        ).all()
-        return [(polarity, emotions_json) for polarity, emotions_json in rows]
 
     def _sentiment_summary(self, agent_id: str) -> tuple[str | None, str | None]:
         """Return (dominant_polarity, dominant_mood_nl) across the agent's member-message sentiment.

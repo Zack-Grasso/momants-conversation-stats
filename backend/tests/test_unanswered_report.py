@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 
 from app.utils.unanswered_report import (
     NONSENSE_NLI_LABELS,
+    build_knowledge_gap_info_html,
     build_knowledge_gap_insight,
     is_nonsense_heuristic,
     prepare_knowledge_gap_report,
@@ -59,6 +60,12 @@ def test_is_nonsense_heuristic_flags_silly_and_off_topic():
     assert not is_nonsense_heuristic("Waar kan ik mijn festival ticket downloaden?")
 
 
+def test_is_nonsense_heuristic_excludes_report_blocklist_questions():
+    assert is_nonsense_heuristic("Dus niet via de mail?")
+    assert is_nonsense_heuristic("Is gewoon adverteren voor niks")
+    assert is_nonsense_heuristic("wat een kut systeem!")
+
+
 @patch("app.utils.unanswered_report.translate_questions_to_dutch")
 @patch("app.utils.unanswered_report.classify_nonsense_batch")
 def test_classify_nonsense_batch_respects_hf_cap(mock_classify, mock_translate):
@@ -88,11 +95,58 @@ def test_prepare_knowledge_gap_report_splits_and_deduplicates(mock_classify, moc
     )
 
     assert report.total_unanswered == 10
-    assert report.nonsense_count == 1
-    assert report.substantive_count == 2
-    assert report.pct_nonsense == 33.3
+    assert report.nonsense_count == 5
+    assert report.substantive_count == 5
+    assert report.pct_nonsense == 50.0
     assert len(report.substantive_questions) == 2
     assert report.substantive_questions[0].startswith("[nl]")
+
+
+@patch("app.utils.unanswered_report.translate_questions_to_dutch")
+@patch("app.utils.unanswered_report.classify_nonsense_batch")
+def test_prepare_knowledge_gap_report_counts_duplicate_occurrences(mock_classify, mock_translate):
+    mock_classify.return_value = [True, False]
+    mock_translate.side_effect = lambda items: items
+
+    report = prepare_knowledge_gap_report(
+        [
+            "Wat zegt een duif?",
+            "Wat zegt een duif?",
+            "Waar is de camping?",
+        ],
+    )
+
+    assert report.total_unanswered == 3
+    assert report.nonsense_count == 2
+    assert report.substantive_count == 1
+    assert report.pct_nonsense == 66.7
+
+
+def test_build_knowledge_gap_info_html_lists_metrics():
+    from app.utils.unanswered_report import KnowledgeGapReport, build_knowledge_gap_info_html
+
+    gap = KnowledgeGapReport(
+        total_unanswered=943,
+        nonsense_count=94,
+        substantive_count=849,
+        pct_nonsense=10.0,
+        pct_substantive=90.0,
+        substantive_questions=(),
+        nonsense_questions=(),
+    )
+    html = build_knowledge_gap_info_html(gap, unanswered_pct=5.0, question_total=20760)
+
+    assert "kg-info-block" in html
+    assert "kg-info-split-row" in html
+    assert html.count("kg-info-section-line") == 1
+    assert "kg-info-bridge-total" not in html
+    assert "waarvan" not in html
+    assert "Te verrijken" not in html
+    assert "kg-info-item-nonsense" in html
+    assert "kg-info-item-substantive" in html
+    assert "943" in html
+    assert "849" in html
+    assert "94" in html
 
 
 def test_build_knowledge_gap_insight_mentions_nonsense_split():
@@ -114,7 +168,7 @@ def test_build_knowledge_gap_insight_mentions_nonsense_split():
     )
 
     assert "niet-serieus of onzin" in insight
-    assert "echte kennislacunes" in insight
+    assert "echte kennisgaten" in insight
     assert "15%" in insight
 
 
@@ -134,11 +188,10 @@ def test_pct_substantive_of_all_questions():
     gap = KnowledgeGapReport(
         total_unanswered=943,
         nonsense_count=76,
-        substantive_count=20,
-        pct_nonsense=79.0,
-        pct_substantive=21.0,
+        substantive_count=867,
+        pct_nonsense=8.1,
+        pct_substantive=91.9,
         substantive_questions=(),
         nonsense_questions=(),
     )
-    assert gap.pct_substantive_of_all(18860, unanswered_pct=5.0) == 1.1
-    assert gap.pct_substantive_of_all(18860) == 1.0
+    assert gap.pct_substantive_of_all(18860) == 4.6

@@ -737,7 +737,7 @@ def build_bereikbaarheid_insight(
 
     parts: list[str] = [
         f"{outside_pct:g}% van de gesprekken vond plaats buiten kantooruren (ma–vr 9–17). "
-        "De grote taart toont tijdens vs. buiten kantooruren; de kleine taart zoomt in op buiten-kantooruren."
+        "Het grote diagram toont tijdens vs. buiten kantooruren; het kleine diagram zoomt in op buiten-kantooruren."
     ]
 
     if outside > 0 and detail:

@@ -857,6 +857,11 @@ TIME_BUCKET_SHORT = {
     "weekend": "Weekend",
 }
 
+OFFICE_MAIN_SHORT = {
+    "kantooruren": "Kantoor",
+    "buiten_kantooruren": "Buiten kantoor",
+}
+
 OFFICE_HOURS_COMPARE_WIDTH = 1280
 
 
@@ -1041,19 +1046,15 @@ def office_hours_channels_chart_svg(
             f'text-anchor="middle">Geen kanaaldata</text>'
         )
 
-    pad = 20.0
-    label_w = 124.0
-    bar_x = pad + label_w + 10.0
-    bar_w = float(width) - bar_x - pad
-    row_h = 58.0
-    row_gap = 54.0
-    y_start = 48.0
+    pad = 24.0
+    max_bar_w = float(width) - pad * 2
+    header_h = 28.0
+    bar_h = 58.0
+    block_gap = 46.0
+    y_start = 28.0
+    max_count = max(channel_counts.get(channel, 0) for channel in active) or 1
 
     parts: list[str] = []
-    parts.append(
-        f'<text x="{pad:.1f}" y="32" font-family="Inter" font-size="12" fill="#888" font-weight="700">'
-        f"Vergelijking per kanaal · zelfde kleuren als totaal</text>"
-    )
 
     for index, channel in enumerate(active):
         cfg = CHANNEL_DISPLAY[channel]
@@ -1062,18 +1063,19 @@ def office_hours_channels_chart_svg(
         if total <= 0:
             continue
 
-        y = y_start + index * (row_h + row_gap)
+        bar_w = max_bar_w * total / max_count
+        y = y_start + index * (header_h + bar_h + block_gap)
+        bar_y = y + header_h + 6
         accent = cfg["chart_stroke"]
+
         parts.append(
-            f'<rect x="{pad:.1f}" y="{y - 10:.1f}" width="4" height="{row_h + 20:.1f}" rx="2" fill="{accent}"/>'
+            f'<rect x="{pad:.1f}" y="{y + 2:.1f}" width="4" height="18" rx="2" fill="{accent}"/>'
         )
         parts.append(
-            f'<text x="{pad + 12:.1f}" y="{y + 16:.1f}" font-family="Inter" font-size="15" fill="#151515" '
-            f'font-weight="800">{escape(cfg["label"])}</text>'
-        )
-        parts.append(
-            f'<text x="{pad + 12:.1f}" y="{y + 36:.1f}" font-family="Inter" font-size="11.5" fill="#888">'
-            f"{_format_chart_count(total)} gesprekken</text>"
+            f'<text x="{pad + 12:.1f}" y="{y + 18:.1f}" font-family="Inter" font-size="14" fill="#151515">'
+            f'<tspan font-weight="800">{escape(cfg["label"])}</tspan>'
+            f'<tspan fill="#888" font-weight="500">  ·  {_format_chart_count(total)} gesprekken</tspan>'
+            f"</text>"
         )
 
         _render_stacked_bar(
@@ -1082,16 +1084,93 @@ def office_hours_channels_chart_svg(
             order=TIME_BUCKET_ORDER,
             colors=TIME_BUCKET_COLORS,
             short_labels=TIME_BUCKET_SHORT,
-            x=bar_x,
-            y=y + 2,
+            x=pad,
+            y=bar_y,
             width=bar_w,
-            height=row_h,
+            height=bar_h,
             clip_id=f"oh-channel-bar-{channel}",
             min_label_pct=7.0,
             font_scale=1.08,
         )
 
     return "\n        ".join(parts)
+
+
+OFFICE_HOURS_CHANNEL_BAR_HEIGHT = 62.0
+OFFICE_HOURS_SINGLE_CHANNEL_SVG_HEIGHT = 86
+
+
+def office_hours_single_channel_bar_svg(
+    channel: str,
+    buckets: dict[str, int],
+    *,
+    width: int = OFFICE_HOURS_COMPARE_WIDTH,
+    bar_height: float = OFFICE_HOURS_CHANNEL_BAR_HEIGHT,
+) -> str:
+    from app.utils.report_data import TIME_BUCKET_ORDER
+
+    total = sum(buckets.get(key, 0) for key in TIME_BUCKET_ORDER)
+    if total <= 0:
+        return (
+            f'<text x="{width / 2:.1f}" y="{bar_height / 2:.1f}" font-family="Inter" font-size="13" fill="#999" '
+            f'text-anchor="middle">Geen gespreksdata</text>'
+        )
+
+    pad = 24.0
+    bar_w = float(width) - pad * 2
+    parts: list[str] = []
+    _render_stacked_bar(
+        parts,
+        buckets,
+        order=TIME_BUCKET_ORDER,
+        colors=TIME_BUCKET_COLORS,
+        short_labels=TIME_BUCKET_SHORT,
+        x=pad,
+        y=8.0,
+        width=bar_w,
+        height=bar_height,
+        clip_id=f"oh-channel-bar-{channel}",
+        min_label_pct=7.0,
+        font_scale=1.08,
+    )
+    return "\n        ".join(parts)
+
+
+def _office_hours_channel_panel_html(
+    channel: str,
+    buckets: dict[str, int],
+    channel_count: int,
+    *,
+    width: int = OFFICE_HOURS_COMPARE_WIDTH,
+) -> str:
+    from app.utils.report_data import CHANNEL_DISPLAY
+
+    cfg = CHANNEL_DISPLAY[channel]
+    svg = office_hours_single_channel_bar_svg(channel, buckets, width=width)
+    count_label = _format_chart_count(channel_count)
+    return (
+        f'<div class="office-hours-panel card office-hours-channel-panel">'
+        f'<div class="office-hours-channel-title">'
+        f'<span class="office-hours-channel-accent" style="background:{cfg["chart_stroke"]}"></span>'
+        f'<span class="office-hours-channel-name">{escape(cfg["label"])}</span>'
+        f'<span class="office-hours-channel-meta">· {count_label} gesprekken</span>'
+        f"</div>"
+        f'<svg viewBox="0 0 {width} {OFFICE_HOURS_SINGLE_CHANNEL_SVG_HEIGHT}" '
+        f'preserveAspectRatio="xMidYMid meet" style="width:100%" '
+        f'xmlns="http://www.w3.org/2000/svg">{svg}</svg>'
+        f"</div>"
+    )
+
+
+def _office_hours_channels_chart_height(channel_count: int) -> int:
+    header_h = 28.0
+    bar_h = 58.0
+    block_gap = 46.0
+    y_start = 28.0
+    if channel_count <= 0:
+        return 120
+    block_h = header_h + 6 + bar_h + block_gap
+    return int(y_start + channel_count * block_h - block_gap + 24)
 
 
 def build_office_hours_stat_grid_html(buckets: dict[str, int]) -> str:
@@ -1160,17 +1239,27 @@ def _office_hours_pie_positions(
                 scale * 0.20,
             )
         return (
-            width * 0.26,
-            height * 0.36,
+            width * 0.20,
+            height * 0.54,
+            scale * 0.36,
+            width * 0.80,
+            height * 0.54,
             scale * 0.30,
-            width * 0.76,
-            height * 0.76,
-            scale * 0.24,
         )
 
     if compact:
         return width * 0.25, height * 0.42, scale * 0.18 if (scale := min(width, height)) else 52.0, width * 0.75, height * 0.42, scale * 0.14
     return width * 0.25, height * 0.45, 78.0, width * 0.75, height * 0.45, 62.0
+
+
+def _connector_arrow_svg(x_tip: float, y_tip: float, *, size: float = 7) -> str:
+    x_back = x_tip - size
+    y_top = y_tip - size * 0.55
+    y_bot = y_tip + size * 0.55
+    return (
+        f'<polygon points="{x_tip:.1f},{y_tip:.1f} {x_back:.1f},{y_top:.1f} {x_back:.1f},{y_bot:.1f}" '
+        f'fill="#bbb"/>'
+    )
 
 
 def _render_pie_caption(
@@ -1203,6 +1292,7 @@ def _render_pie_column(
     show_legend: bool = True,
     show_slice_labels: bool = False,
     label_scale: float = 1.0,
+    short_labels: dict[str, str] | None = None,
 ) -> None:
     import math
 
@@ -1227,22 +1317,35 @@ def _render_pie_column(
         if path:
             color = colors.get(key, "#cbd5e1")
             parts.append(f'<path d="{path}" fill="{color}" stroke="#fff" stroke-width="{1.5 if compact else 2}"/>')
-            if show_slice_labels and sweep >= 14:
+            slice_title = (short_labels or {}).get(key)
+            min_sweep = 22 if slice_title else 14
+            if show_slice_labels and sweep >= min_sweep:
                 pct = round(100 * value / total, 1)
                 mid = math.radians(angle + sweep / 2)
-                label_r = radius * 0.58
+                label_r = radius * 0.56
                 lx = cx + label_r * math.cos(mid)
                 ly = cy + label_r * math.sin(mid)
                 count_label = f"{value:,}".replace(",", ".")
                 fill = "#fff" if key in {"nacht", "kantooruren"} else "#151515"
+                title_size = (9 if compact else 10) * label_scale
                 pct_size = (10 if compact else 11) * label_scale
                 count_size = (9 if compact else 10) * label_scale
+                if slice_title:
+                    parts.append(
+                        f'<text x="{lx:.1f}" y="{ly - 18:.1f}" font-family="Inter" font-size="{title_size:.1f}" '
+                        f'fill="{fill}" text-anchor="middle" font-weight="700">{escape(slice_title)}</text>'
+                    )
+                    pct_y = ly + 4
+                    count_y = ly + 22
+                else:
+                    pct_y = ly - 4
+                    count_y = ly + 12
                 parts.append(
-                    f'<text x="{lx:.1f}" y="{ly - 4:.1f}" font-family="Inter" font-size="{pct_size:.1f}" '
+                    f'<text x="{lx:.1f}" y="{pct_y:.1f}" font-family="Inter" font-size="{pct_size:.1f}" '
                     f'fill="{fill}" text-anchor="middle" font-weight="700">{pct:g}%</text>'
                 )
                 parts.append(
-                    f'<text x="{lx:.1f}" y="{ly + 8:.1f}" font-family="Inter" font-size="{count_size:.1f}" '
+                    f'<text x="{lx:.1f}" y="{count_y:.1f}" font-family="Inter" font-size="{count_size:.1f}" '
                     f'fill="{fill}" text-anchor="middle">{count_label}</text>'
                 )
         angle += sweep
@@ -1397,6 +1500,7 @@ def office_hours_dual_pie_svg(
         show_legend=show_legend,
         show_slice_labels=show_slice_labels,
         label_scale=label_scale,
+        short_labels=OFFICE_MAIN_SHORT if show_slice_labels else None,
     )
 
     if detail and main.get("buiten_kantooruren", 0) > 0:
@@ -1422,24 +1526,19 @@ def office_hours_dual_pie_svg(
             show_legend=show_legend,
             show_slice_labels=show_slice_labels,
             label_scale=label_scale,
+            short_labels=TIME_BUCKET_SHORT if show_slice_labels else None,
         )
-        import math
-
-        if layout == "diagonal":
-            angle = math.radians(40)
-            x1 = main_cx + main_r * math.cos(angle)
-            y1 = main_cy + main_r * math.sin(angle)
-            x2 = detail_cx - detail_r * math.cos(angle)
-            y2 = detail_cy - detail_r * math.sin(angle)
-        else:
-            x1 = main_cx + main_r + 6
-            y1 = main_cy
-            x2 = detail_cx - detail_r - 8
-            y2 = main_cy
+        x1 = main_cx + main_r + 8
+        y1 = main_cy
+        arrow_size = 7.0
+        x2_tip = detail_cx - detail_r - 8
+        y2 = main_cy
+        x2_line = x2_tip - arrow_size
         parts.append(
-            f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" '
+            f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2_line:.1f}" y2="{y2:.1f}" '
             f'stroke="#bbb" stroke-width="1.2" stroke-dasharray="4 3"/>'
         )
+        parts.append(_connector_arrow_svg(x2_tip, y2, size=arrow_size))
     elif not compact:
         parts.append(
             f'<text x="{detail_cx:.1f}" y="{detail_cy:.1f}" font-family="Inter" font-size="12" fill="#bbb" '
@@ -1466,7 +1565,7 @@ def build_office_hours_shared_legend_html(*, chart_kind: str = "bar") -> str:
     if chart_kind == "pie":
         note = (
             "Kantooruren: ma–vr 09:00–17:00 (Europe/Amsterdam). "
-            "Percentages en aantallen staan in elke taart."
+            "Percentages en aantallen staan in elk diagram."
         )
     else:
         note = (
@@ -1482,10 +1581,11 @@ def build_office_hours_shared_legend_html(*, chart_kind: str = "bar") -> str:
 
 
 def _office_hours_total_panel_html(title: str, buckets: dict[str, int]) -> str:
-    svg_height = 360
+    svg_width = 900
+    svg_height = 420
     svg = office_hours_dual_pie_svg(
         buckets,
-        width=700,
+        width=svg_width,
         height=svg_height,
         compact=False,
         layout="diagonal",
@@ -1495,7 +1595,7 @@ def _office_hours_total_panel_html(title: str, buckets: dict[str, int]) -> str:
     return (
         f'<div class="office-hours-total card office-hours-total-pie">'
         f'<div class="office-hours-head">{escape(title)}</div>'
-        f'<svg viewBox="0 0 700 {svg_height}" preserveAspectRatio="xMidYMid meet" style="width:100%" '
+        f'<svg viewBox="0 0 {svg_width} {svg_height}" preserveAspectRatio="xMidYMid meet" style="width:100%" '
         f'xmlns="http://www.w3.org/2000/svg">{svg}</svg>'
         f"</div>"
     )
@@ -1546,21 +1646,18 @@ def build_office_hours_channel_slides_html(
     if not active:
         return ""
 
-    svg_height = 108 + len(active) * 112
     chart_width = OFFICE_HOURS_COMPARE_WIDTH
-    chart = office_hours_channels_chart_svg(
-        by_channel,
-        channel_counts,
-        width=chart_width,
-        height=svg_height,
-    )
     legend = build_office_hours_shared_legend_html(chart_kind="bar")
-    panel = (
-        f'<div class="office-hours-compare card">'
-        f'<svg viewBox="0 0 {chart_width} {svg_height}" preserveAspectRatio="xMidYMid meet" style="width:100%" '
-        f'xmlns="http://www.w3.org/2000/svg">{chart}</svg>'
-        f"</div>"
+    panels = "".join(
+        _office_hours_channel_panel_html(
+            channel,
+            by_channel.get(channel, {}),
+            channel_counts.get(channel, 0),
+            width=chart_width,
+        )
+        for channel in active
     )
+    grid_class = "cols-1" if len(active) <= 2 else f"cols-{min(len(active), 3)}"
     return (
         f'<section class="slide slide-bereikbaarheid-channels">'
         f'<div class="topbar"><div class="logo">{ momants_logo_html() }</div>'
@@ -1569,7 +1666,7 @@ def build_office_hours_channel_slides_html(
         f"<h1>Per kanaal · wanneer?</h1>"
         f'<div class="body">'
         f"{legend}"
-        f"{panel}"
+        f'<div class="office-hours-channels-grid {grid_class}">{panels}</div>'
         f"</div>"
         f'<div class="footer"><span>{escape(event_name)} · Conversation Analysis {escape(date_range)} · Momants</span>'
         f"<span>{page_start} / {total_pages}</span></div>"
