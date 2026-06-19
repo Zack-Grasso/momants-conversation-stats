@@ -16,6 +16,7 @@ from app.ml.intent_labels import (
     resolve_intent,
     reverse_description_map,
 )
+from app.ml.sentiment_scoring import adjust_stars_with_emotions, stars_to_label, stars_to_polarity
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +90,9 @@ class ModelRegistry:
             from app.ml.hf_text_classification import get_hf_text_classification_client
 
             get_hf_text_classification_client()
+            self.get_sentiment_pipeline()
         else:
+            self.get_sentiment_pipeline()
             self.get_polarity_pipeline()
             self.get_emotion_pipeline()
         if self._settings.app_role in ("worker", "scheduler"):
@@ -337,7 +340,7 @@ class ModelRegistry:
             "stars": 3,
             "label": "NEUTRAL",
             "score": 0.0,
-            "model_name": f"{self._settings.polarity_model}+{self._settings.emotion_model}",
+            "model_name": f"{self._settings.sentiment_model}+{self._settings.emotion_model}",
             "raw_label": None,
             "raw_score": None,
             "low_confidence": True,
@@ -348,21 +351,54 @@ class ModelRegistry:
             "translated": False,
         }
 
+    def _compose_v2_result(
+        self,
+        *,
+        raw_label: str,
+        raw_score: float,
+        emotions: list[dict],
+        original_language: str,
+        translated: bool,
+    ) -> dict:
+        stars, label = self._resolve_label(raw_label)
+        polarity = stars_to_polarity(stars)
+        adjusted_stars = adjust_stars_with_emotions(stars, emotions)
+        adjusted_label = stars_to_label(adjusted_stars)
+        adjusted_polarity = stars_to_polarity(adjusted_stars)
+        threshold = self._settings.sentiment_confidence_threshold
+        return {
+            "stars": adjusted_stars,
+            "label": adjusted_label,
+            "score": raw_score,
+            "model_name": f"{self._settings.sentiment_model}+{self._settings.emotion_model}",
+            "raw_label": raw_label,
+            "raw_score": raw_score,
+            "low_confidence": raw_score < threshold,
+            "polarity": adjusted_polarity,
+            "polarity_score": raw_score,
+            "emotions": emotions,
+            "original_language": original_language,
+            "translated": translated,
+        }
+
     def _run_polarity_batch(self, texts: list[str]) -> list[tuple[str, float]]:
+        """Run multilingual sentiment on original text (no translation step)."""
         if not texts:
             return []
+        model_id = self._settings.sentiment_model
         if self._settings.sentiment_uses_remote_inference:
             from app.ml.hf_text_classification import get_hf_text_classification_client
 
+            endpoint = self._settings.polarity_inference_endpoint or ""
             outputs = get_hf_text_classification_client().classify_batch(
                 texts,
-                model_id=self._settings.polarity_model,
-                endpoint=self._settings.polarity_inference_endpoint,
+                model_id=model_id,
+                endpoint=endpoint,
                 top_k=1,
             )
             return [(str(out[0]["label"]), float(out[0]["score"])) for out in outputs]
 
-        classifier = self.get_polarity_pipeline()
+        classifier = self.get_sentiment_pipeline()
         with self._polarity_inference_lock:
             outputs = classifier([t[:512] for t in texts], batch_size=max(1, self._settings.sentiment_batch_size))
         results: list[tuple[str, float]] = []
@@ -406,29 +442,31 @@ class ModelRegistry:
         return self.analyze_sentiment_v2_batch([text])[0]
 
     def analyze_sentiment_v2_batch(self, texts: list[str]) -> list[dict]:
-        """Stage 2 pipeline: detect language -> translate to EN -> parallel polarity + emotion.
+        """Stage 2 pipeline: detect language -> polarity on original text -> emotion on EN.
 
-        Always returns one dict per input (neutral placeholder for blank/failed entries) and
-        keeps the legacy stars/label/score fields populated for downstream metrics/reports.
+        Polarity uses the multilingual sentiment model without translation. Emotion still
+        runs on English (translated when needed). Stars are nudged by the top emotion.
         """
         results: list[dict] = [self._empty_v2_result() for _ in texts]
         cleaned: list[tuple[int, str]] = [(i, t) for i, t in enumerate(texts) if t and t.strip()]
         if not cleaned:
             return results
 
-        languages: list[str] = []
+        original_texts: list[str] = []
         english_texts: list[str] = []
+        languages: list[str] = []
         translated_flags: list[bool] = []
         for _, text in cleaned:
             lang = self.detect_language(text)
             english, was_translated = self.translate_to_english(text, lang)
-            languages.append(lang)
+            original_texts.append(text)
             english_texts.append(english)
+            languages.append(lang)
             translated_flags.append(was_translated)
 
         try:
             with ThreadPoolExecutor(max_workers=2) as executor:
-                polarity_future = executor.submit(self._run_polarity_batch, english_texts)
+                polarity_future = executor.submit(self._run_polarity_batch, original_texts)
                 emotion_future = executor.submit(self._run_emotion_batch, english_texts)
                 polarities = polarity_future.result()
                 emotions = emotion_future.result()
@@ -436,25 +474,16 @@ class ModelRegistry:
             logger.exception("Stage 2 dual-sentiment batch failed")
             return results
 
-        threshold = self._settings.sentiment_confidence_threshold
-        model_name = f"{self._settings.polarity_model}+{self._settings.emotion_model}"
         for offset, (index, _) in enumerate(cleaned):
             raw_label, raw_score = polarities[offset]
-            polarity, stars, label = self._polarity_label(raw_label)
-            results[index] = {
-                "stars": stars,
-                "label": label,
-                "score": raw_score,
-                "model_name": model_name,
-                "raw_label": raw_label,
-                "raw_score": raw_score,
-                "low_confidence": raw_score < threshold,
-                "polarity": polarity,
-                "polarity_score": raw_score,
-                "emotions": emotions[offset] if offset < len(emotions) else [],
-                "original_language": languages[offset],
-                "translated": translated_flags[offset],
-            }
+            message_emotions = emotions[offset] if offset < len(emotions) else []
+            results[index] = self._compose_v2_result(
+                raw_label=raw_label,
+                raw_score=raw_score,
+                emotions=message_emotions,
+                original_language=languages[offset],
+                translated=translated_flags[offset],
+            )
         return results
 
     def get_embedding_model(self):
@@ -552,8 +581,10 @@ class ModelRegistry:
         texts: list[str],
         language: str,
         sentiment_stars: list[int | None] | None = None,
+        *,
+        intent_slugs: list[str] | None = None,
     ) -> list[tuple[str, float]]:
-        slugs = self._settings.intent_label_list
+        slugs = intent_slugs or self._settings.intent_slug_list
         if not texts or not slugs:
             return [("general", 0.0) for _ in texts]
 

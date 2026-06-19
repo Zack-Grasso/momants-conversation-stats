@@ -163,6 +163,430 @@
   .card.dark .sub { color: #9ecf6a; }
   .card.green .sub { color: var(--accent-dark); }
 
+  .card-details {
+    list-style: none;
+    margin: 10px 0 0;
+    padding: 0;
+    font-size: 12.5px;
+    color: var(--muted);
+    line-height: 1.55;
+  }
+  .card-details li + li { margin-top: 5px; }
+  .card.green .card-details { color: var(--accent-dark); }
+  .card-details strong { color: var(--navy); font-weight: 700; }
+  .card.green .card-details strong { color: #151515; }
+
+  /* page 2 overview — explanation left, result right */
+  .g2-overview {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    align-items: stretch;
+  }
+  .slide-overview .eyebrow { margin-top: 10px; }
+  .slide-overview h1 { font-size: 38px; }
+  .slide-overview .body {
+    flex: 1;
+    min-height: 0;
+    padding-top: 10px;
+  }
+  .slide-overview .g2-overview {
+    flex: 1;
+    min-height: 0;
+    height: 100%;
+    grid-template-rows: 1fr 1fr;
+    gap: 16px;
+  }
+  .card-split {
+    padding: 18px 20px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .card-split .lbl { margin-bottom: 0; }
+  .card-split .card-split-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 172px;
+    gap: 14px;
+    align-items: stretch;
+    margin-top: 12px;
+    flex: 1;
+  }
+  .card-split .card-split-info {
+    min-width: 0;
+    border-right: none;
+    padding-right: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .card-split .card-lead {
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: #555;
+    margin: 0 0 12px;
+  }
+  .card-split.green .card-lead { color: #2d4a12; }
+  .card-split .card-details {
+    margin-top: 0;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .card-split .card-details li {
+    position: relative;
+    padding-left: 13px;
+  }
+  .card-split .card-details li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 7px;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: #c4c4c0;
+  }
+  .card-split.green .card-details li::before {
+    background: var(--accent-dark);
+    opacity: .45;
+  }
+  .card-split .card-details li + li { margin-top: 7px; }
+  .card-split .metric-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--muted);
+  }
+  .card-split.green .metric-rows { color: var(--accent-dark); }
+  .card-split .metric-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: baseline;
+  }
+  .card-split .metric-row span:first-child { flex-shrink: 0; }
+  .card-split .metric-row strong {
+    color: var(--navy);
+    font-weight: 700;
+    text-align: right;
+  }
+  .card-split.green .metric-row strong { color: #151515; }
+  .card-split .metric-row.total {
+    margin-top: 4px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(0,0,0,.07);
+    font-weight: 600;
+    color: #444;
+  }
+  .card-split.green .metric-row.total {
+    border-top-color: var(--accent-border);
+    color: #2d4a12;
+  }
+  .card-split .card-split-result {
+    background: #fff;
+    border: 1px solid #ebebe8;
+    border-radius: 10px;
+    padding: 16px 12px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    min-width: 0;
+  }
+  .card-split.green .card-split-result {
+    background: rgba(255,255,255,.55);
+    border-color: var(--accent-border);
+  }
+  .card-split .card-split-result .num {
+    font-size: 40px;
+    letter-spacing: -.03em;
+    line-height: 1;
+    white-space: nowrap;
+  }
+  .card-split .card-split-result .num-sm {
+    font-size: 22px;
+    letter-spacing: -.02em;
+    white-space: nowrap;
+  }
+  .card-split .result-caption {
+    font-size: 10.5px;
+    color: #888;
+    margin-top: 8px;
+    line-height: 1.35;
+    max-width: none;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    font-weight: 600;
+  }
+  .card-split.green .result-caption { color: var(--accent-dark); }
+  .card-split .result-divider {
+    width: 100%;
+    height: 1px;
+    background: #ebebe8;
+    margin: 14px 0 12px;
+  }
+  .card-split.green .result-divider { background: var(--accent-border); }
+
+  .slide-overview .card-split {
+    height: 100%;
+    padding: 24px 28px;
+  }
+  .slide-overview .card-split .card-split-body {
+    margin-top: 14px;
+    grid-template-columns: minmax(0, 1fr) 210px;
+    gap: 18px;
+  }
+  .slide-overview .card-split .card-lead {
+    font-size: 13.5px;
+    line-height: 1.6;
+    margin-bottom: 14px;
+  }
+  .slide-overview .card-split .card-details {
+    font-size: 13px;
+    line-height: 1.55;
+  }
+  .slide-overview .card-split .card-details li + li { margin-top: 9px; }
+  .slide-overview .card-split .metric-rows {
+    font-size: 13px;
+    gap: 9px;
+  }
+  .slide-overview .card-split .card-split-result {
+    padding: 20px 16px;
+  }
+  .slide-overview .card-split .card-split-result .num {
+    font-size: 52px;
+  }
+  .slide-overview .card-split .card-split-result .num-sm {
+    font-size: 26px;
+  }
+  .slide-overview .card-split .result-caption {
+    font-size: 11px;
+    margin-top: 10px;
+  }
+  .slide-overview .card-split .lbl {
+    font-size: 12px;
+  }
+
+  .logo .mom-logo-text {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -.02em;
+    color: #151515;
+  }
+
+  /* page 3 — full-width volume chart */
+  .slide-volume h1 { font-size: 38px; }
+  .slide-volume .body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding-top: 10px;
+  }
+  .slide-volume .volume-chart-card {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: visible;
+    padding: 16px 22px 10px;
+  }
+  .slide-volume .volume-chart-card svg {
+    flex: 1;
+    width: 100%;
+    min-height: 300px;
+    overflow: visible;
+  }
+  .slide-volume .volume-stats {
+    flex-shrink: 0;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+  }
+  .slide-volume .volume-stats .card {
+    padding: 16px 20px;
+  }
+  .slide-volume .volume-stats .num {
+    font-size: 28px;
+  }
+
+  /* page 4+ — one channel per slide */
+  .slide-channel-volume h1 { font-size: 38px; }
+  .slide-channel-volume .body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-top: 8px;
+  }
+  .slide-channel-volume .channel-volume-insight {
+    flex-shrink: 0;
+    margin: 0;
+    font-size: 13.5px;
+    padding: 14px 18px;
+  }
+  .slide-channel-volume .channel-volume-single {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: visible;
+    padding: 14px 18px 8px;
+  }
+  .slide-channel-volume .channel-volume-single svg {
+    flex: 1;
+    min-height: 320px;
+    overflow: visible;
+  }
+
+  /* page 3 — per-channel volume charts (legacy grid — unused) */
+  .slide-channel-volume h1 { font-size: 38px; }
+  .slide-channel-volume .body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-top: 8px;
+  }
+  .slide-channel-volume .channel-volume-insight {
+    flex-shrink: 0;
+    margin: 0;
+    font-size: 13.5px;
+    padding: 14px 18px;
+  }
+  .channel-volume-grid {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    gap: 12px;
+  }
+  .channel-volume-grid.cols-1 {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr;
+  }
+  .channel-volume-grid.cols-2 {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr;
+  }
+  .channel-volume-grid.cols-3 {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+  }
+  .channel-volume-grid.cols-3 .channel-volume-item:last-child {
+    grid-column: 1 / -1;
+  }
+  .channel-volume-item {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    padding: 12px 16px 6px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: visible;
+  }
+  .channel-volume-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 6px;
+    flex-shrink: 0;
+  }
+  .channel-volume-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--navy);
+  }
+  .channel-volume-meta {
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 600;
+  }
+  .channel-volume-item svg {
+    flex: 1;
+    width: 100%;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  /* page 5 — kanalen & timing */
+  .slide-channels-timing h1 { font-size: 38px; }
+  .slide-channels-timing .channels-timing-intro {
+    flex-shrink: 0;
+    margin: 0 0 12px;
+    font-size: 13.5px;
+    padding: 14px 18px;
+  }
+  .channel-timing-stats {
+    flex-shrink: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    margin-top: 12px;
+  }
+  .channel-timing-stats .card { padding: 14px 16px; }
+  .channel-timing-stats .num { font-size: 24px; }
+
+  /* page 6+ — bereikbaarheid dual pies */
+  .slide-bereikbaarheid h1 { font-size: 38px; }
+  .slide-bereikbaarheid .body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding-top: 8px;
+  }
+  .slide-bereikbaarheid .bereikbaarheid-intro {
+    flex-shrink: 0;
+    margin: 0 0 12px;
+    font-size: 13.5px;
+    padding: 14px 18px;
+  }
+  .office-hours-total {
+    flex: 1;
+    min-height: 0;
+    padding: 16px 20px 12px;
+    display: flex;
+    flex-direction: column;
+  }
+  .office-hours-total svg {
+    flex: 1;
+    min-height: 260px;
+    overflow: visible;
+  }
+  .slide-bereikbaarheid-channels h1 { font-size: 38px; }
+  .slide-bereikbaarheid-channels .body {
+    flex: 1;
+    min-height: 0;
+    padding-top: 8px;
+  }
+  .office-hours-channel-full {
+    flex: 1;
+    min-height: 0;
+    padding: 14px 18px 10px;
+    display: flex;
+    flex-direction: column;
+  }
+  .office-hours-channel-full svg {
+    flex: 1;
+    min-height: 240px;
+    overflow: visible;
+  }
+  .office-hours-head {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--muted);
+    margin-bottom: 4px;
+    flex-shrink: 0;
+  }
+
   /* insight */
   .insight {
     background: var(--accent);
@@ -484,9 +908,9 @@
     <!-- left -->
     <div style="flex:1;min-width:0">
       <div class="eyebrow" style="margin-top:0">{{event_name}} · Conversation Analysis</div>
-      <h1><span class="hero-stat">{{conversations_total}}</span> gesprekken.</h1>
+      <h1>{{conversations_total}} gesprekken.</h1>
       <p style="font-size:16px;line-height:1.8;color:#444;margin-top:18px;max-width:680px">
-        In de periode {{date_range}} verwerkte de Momants-agent <span class="hero-stat">{{conversations_total}} gesprekken</span>
+        In de periode {{date_range}} verwerkte de Momants-agent <span class="hero-stat">{{conversations_total}}</span> gesprekken
         via {{channels_sentence}} — goed voor <span class="hero-stat">{{messages_total}}</span> berichten.
         <span class="hero-stat">{{pct_resolved}}%</span> werd zelfstandig opgelost.
       </p>
@@ -496,25 +920,27 @@
     </div>
     <!-- right panel -->
     <div style="width:320px;flex-shrink:0;background:var(--accent);border:1px solid var(--accent-border);border-radius:14px;padding:28px 26px">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px">
-        <div class="lbl" style="color:var(--accent-dark);margin-bottom:0">Totaal gesprekken</div>
-        <div class="lbl" style="color:var(--accent-dark);margin-bottom:0;text-align:right">Opgelost door AI</div>
-      </div>
-      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:16px;margin-top:8px">
-        <div class="hero-stat" style="font-size:56px;letter-spacing:-.03em;line-height:1">{{conversations_total}}</div>
-        <div class="hero-stat" style="font-size:26px;letter-spacing:-.02em;line-height:1;text-align:right">{{pct_resolved}}%</div>
+      <div class="lbl" style="color:var(--accent-dark);margin-bottom:0">Totaal gesprekken</div>
+      <div style="display:flex;align-items:flex-end;gap:14px;margin-top:8px">
+        <div style="font-size:56px;font-weight:800;color:#151515;letter-spacing:-.03em;line-height:1">{{conversations_total}}</div>
+        <div style="padding-bottom:8px;line-height:1.2;margin-left:18px">
+          <div style="font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent-dark);font-weight:700;max-width:72px">Opgelost door AI</div>
+          <div style="font-size:18px;font-weight:700;color:#151515;letter-spacing:-.01em;margin-top:4px">{{pct_resolved}}%</div>
+        </div>
       </div>
       <div style="font-size:13px;color:var(--accent-dark);margin-top:6px">{{date_range}}</div>
       <div style="border-top:1px solid var(--accent-border);margin:18px 0"></div>
       <div class="lbl" style="color:var(--accent-dark)">Bespaarde support uren</div>
       <div style="font-size:34px;font-weight:800;color:#151515;letter-spacing:-.02em;line-height:1">{{stats_hours_saved}}</div>
-      <div style="font-size:13px;color:var(--accent-dark);margin-top:6px">Bespaarde supportkosten: {{stats_support_cost_saved}}</div>
+      <div style="border-top:1px solid var(--accent-border);margin:18px 0"></div>
+      <div class="lbl" style="color:var(--accent-dark)">Bespaarde supportkosten</div>
+      <div style="font-size:34px;font-weight:800;color:#151515;letter-spacing:-.02em;line-height:1">{{stats_support_cost_saved}}</div>
     </div>
   </div>
-  <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>1 / 9</span></div>
+  <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>1 / {{report_page_total}}</span></div>
 </section>
 
-<section class="slide">
+<section class="slide slide-overview">
   <div class="topbar">
     <div class="logo"><svg class="mom-logo" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 429.8 59.7">
   <defs>
@@ -542,35 +968,87 @@
     <div class="doc">{{event_name}} · Conversation Analysis</div>
   </div>
   <div class="eyebrow">Overzicht</div>
-  <h1>De Agent voor {{event_name}} samengevat in cijfers over de periode van {{date_range}}</h1>
-  <div class="body" style="padding-top:14px;gap:14px">
-    <div class="g2" style="flex:1;min-height:0">
-      <div class="card">
+  <h1>De Agent voor {{event_name}} in cijfers</h1>
+  <div class="body">
+    <div class="g2-overview">
+      <div class="card card-split">
         <div class="lbl"><i data-lucide="messages-square" class="ic"></i> Totaal gesprekken</div>
-        <div class="num">{{stats_conversations_total}}</div>
-        <div class="sub">Waarvan {{channel_whatsapp_count}} via WhatsApp</div>
+        <div class="card-split-body">
+          <div class="card-split-info">
+            <p class="card-lead">Alle gesprekken die de Momants-agent in deze periode heeft gevoerd, per kanaal.</p>
+            <ul class="card-details">
+              <li><strong>{{avg_messages_per_conversation}}</strong> berichten gem. per gesprek</li>
+              <li>WhatsApp <strong>{{channel_whatsapp_count}}</strong> ({{channel_whatsapp_pct}}%)</li>
+              <li>Chat <strong>{{channel_chat_count}}</strong> ({{channel_chat_pct}}%)</li>
+              <li>Reactietijd gem. <strong>{{avg_first_response_fmt}}</strong> · mediaan <strong>{{median_response_fmt}}</strong></li>
+            </ul>
+          </div>
+          <div class="card-split-result">
+            <div class="num">{{stats_conversations_total}}</div>
+            <div class="result-caption">gesprekken</div>
+            <div class="result-caption" style="margin-top:4px;text-transform:none;letter-spacing:0;font-weight:500">{{date_range}}</div>
+          </div>
+        </div>
       </div>
-      <div class="card">
+      <div class="card card-split">
         <div class="lbl"><i data-lucide="bot" class="ic"></i> AI-afhandeling</div>
-        <div class="num">{{pct_resolved}}%</div>
-        <div class="sub">Volledig zelfstandig opgelost</div>
+        <div class="card-split-body">
+          <div class="card-split-info">
+            <p class="card-lead">Gesprekken die de agent volledig zelfstandig afrondde, zonder menselijke tussenkomst.</p>
+            <ul class="card-details">
+              <li><strong>{{count_resolved}}</strong> volledig opgelost door AI</li>
+              <li><strong>{{count_referred}}</strong> doorverwezen via e-mailadres ({{pct_referred}}%)</li>
+              <li><strong>{{count_other_handling}}</strong> open of deels afgehandeld</li>
+            </ul>
+          </div>
+          <div class="card-split-result">
+            <div class="num">{{pct_resolved}}%</div>
+            <div class="result-caption">zelfstandig opgelost</div>
+          </div>
+        </div>
       </div>
-      <div class="card">
+      <div class="card card-split">
         <div class="lbl"><i data-lucide="clock" class="ic"></i> Bespaarde support uren</div>
-        <div class="num">{{stats_hours_saved}}</div>
-        <div class="sub">Bespaarde supportkosten: {{stats_support_cost_saved}}</div>
+        <div class="card-split-body">
+          <div class="card-split-info">
+            <p class="card-lead">Geschatte tijd die support anders aan deze gesprekken zou besteden, omgerekend naar kosten.</p>
+            <ul class="card-details">
+              <li>Tarief: <strong>{{stats_support_hourly_rate}}</strong></li>
+              <li><strong>{{stats_support_calc_detail}}</strong></li>
+            </ul>
+          </div>
+          <div class="card-split-result">
+            <div class="num">{{stats_hours_saved}}</div>
+            <div class="result-caption">uren bespaard</div>
+            <div class="result-divider"></div>
+            <div class="num num-sm">{{stats_support_cost_saved}}</div>
+            <div class="result-caption">kosten bespaard</div>
+          </div>
+        </div>
       </div>
-      <div class="card green">
+      <div class="card card-split green">
         <div class="lbl"><i data-lucide="trending-up" class="ic"></i> Totale waardecreatie</div>
-        <div class="num">{{stats_total_value}}</div>
-        <div class="sub">Assisted revenue + kostenbesparing</div>
+        <div class="card-split-body">
+          <div class="card-split-info">
+            <p class="card-lead">Omzet via AI-begeleide aankopen plus bespaarde supportkosten.</p>
+            <div class="metric-rows">
+              <div class="metric-row"><span>Assisted revenue</span><strong>{{stats_assisted_revenue_detail}}</strong></div>
+              <div class="metric-row"><span>Support besparing</span><strong>{{stats_support_cost_saved}}</strong></div>
+              <div class="metric-row total"><span>Totaal</span><strong>{{stats_total_value_detail}}</strong></div>
+            </div>
+          </div>
+          <div class="card-split-result">
+            <div class="num num-sm">{{stats_total_value_detail}}</div>
+            <div class="result-caption">totale waarde</div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
-  <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>2 / 9</span></div>
+  <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>2 / {{report_page_total}}</span></div>
 </section>
 
-<section class="slide">
+<section class="slide slide-volume">
   <div class="topbar">
     <div class="logo"><svg class="mom-logo" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 429.8 59.7">
   <defs>
@@ -598,12 +1076,11 @@
     <div class="doc">{{event_name}} · Conversation Analysis</div>
   </div>
   <div class="eyebrow">Gespreksvolume</div>
-  <h1>Wanneer was het het drukst?</h1>
-  <div class="body" style="flex-direction:row;gap:22px;padding-top:14px">
-    <!-- chart -->
-    <div class="card" style="flex:1;min-width:0;padding:20px 24px;display:flex;flex-direction:column">
-      <div style="font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:12px">Gesprekken per dag · {{date_range}}</div>
-      <svg viewBox="0 0 800 210" style="width:100%;flex:1" xmlns="http://www.w3.org/2000/svg">
+  <h1>Totaal gespreksvolume</h1>
+  <div class="body">
+    <div class="card volume-chart-card">
+      <div style="font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:8px">Gesprekken per dag · {{date_range}}</div>
+      <svg viewBox="0 0 1280 340" style="overflow:visible" xmlns="http://www.w3.org/2000/svg">
         <defs>
           <linearGradient id="vg" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stop-color="#E2F5C9" stop-opacity=".85"/>
@@ -613,29 +1090,30 @@
         {{chart_slide2_inner}}
       </svg>
     </div>
-    <!-- stat cards -->
-    <div style="width:240px;flex-shrink:0;display:flex;flex-direction:column;gap:14px">
-      <div class="card dark" style="flex:1">
+    <div class="volume-stats">
+      <div class="card dark">
         <div class="lbl"><i data-lucide="calendar-days" class="ic"></i> Drukste dag</div>
-        <div class="num" style="font-size:28px">{{peak_day_name}}</div>
+        <div class="num">{{peak_day_name}}</div>
         <div class="sub">{{peak_day_count}} gesprekken · {{peak_day_label}}</div>
       </div>
-      <div class="card" style="flex:1">
+      <div class="card">
         <div class="lbl"><i data-lucide="bar-chart-3" class="ic"></i> Gem. per dag</div>
         <div class="num">{{avg_conversations_per_day}}</div>
         <div class="sub">gesprekken / dag</div>
       </div>
-      <div class="card" style="flex:1">
+      <div class="card">
         <div class="lbl"><i data-lucide="clock" class="ic"></i> Drukste uur</div>
         <div class="num" style="font-size:22px">{{peak_hour}}</div>
         <div class="sub">gem. {{peak_hour_avg}} gesprekken / uur</div>
       </div>
     </div>
   </div>
-  <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>3 / 9</span></div>
+  <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>{{page_num_total_volume}} / {{report_page_total}}</span></div>
 </section>
 
-<section class="slide">
+{{channel_volume_slides}}
+
+<section class="slide slide-channels-timing">
   <div class="topbar">
     <div class="logo"><svg class="mom-logo" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 429.8 59.7">
   <defs>
@@ -664,34 +1142,31 @@
   </div>
   <div class="eyebrow">Kanalen &amp; timing</div>
   <h1>Waar en wanneer praten mensen?</h1>
-  <div class="body" style="flex-direction:row;gap:18px;padding-top:14px">
-    <!-- channel card -->
-    <div class="card" style="flex:1.1;min-width:0;padding:22px 26px;display:flex;flex-direction:column;gap:0">
-      <div style="font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:16px">Gesprekken per kanaal</div>
-      <div style="display:flex;flex-direction:column;gap:14px;flex:1">
-        {{channel_breakdown_rows}}
+  <div class="body" style="padding-top:8px">
+    <div class="insight channels-timing-intro">{{channels_timing_intro}}</div>
+    <div style="display:flex;flex-direction:row;gap:18px;flex:1;min-height:0">
+      <div class="card" style="flex:1.1;min-width:0;padding:22px 26px;display:flex;flex-direction:column">
+        <div style="font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:16px">Gesprekken per kanaal</div>
+        <div style="display:flex;flex-direction:column;gap:14px;flex:1">
+          {{channel_breakdown_rows}}
+        </div>
       </div>
-      <div style="border-top:1px solid #eee;margin-top:18px;padding-top:16px">
-        <div style="font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:14px">Gem. sentiment per kanaal</div>
-        {{channel_sentiment_cols}}
+      <div class="card" style="flex:1;min-width:0;padding:22px 26px;display:flex;flex-direction:column">
+        <div style="font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:12px">Gesprekken per uur van de dag (gem.)</div>
+        <svg viewBox="0 0 384 175" style="width:100%;flex:1" xmlns="http://www.w3.org/2000/svg">
+          {{chart_slide3_inner}}
+        </svg>
       </div>
     </div>
-    <!-- hour chart -->
-    <div class="card" style="flex:1;min-width:0;padding:22px 26px;display:flex;flex-direction:column">
-      <div style="font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:12px">Gesprekken per uur van de dag (gem.)</div>
-      <svg viewBox="0 0 384 175" style="width:100%;flex:1" xmlns="http://www.w3.org/2000/svg">
-        {{chart_slide3_inner}}
-      </svg>
+    {{channel_timing_stats}}
+    <div class="insight" style="margin-top:12px">
+      <strong>Key Insight</strong> · {{channels_timing_insight}}
     </div>
   </div>
-  <div class="insight" style="margin-top:14px">
-    <strong>Key Insight</strong> · {{dominant_channel}} is het dominante kanaal (<span class="tag">{{dominant_channel_pct}}%</span>) met het hoogste sentiment ({{highest_sentiment_channel}} · {{highest_sentiment_score}}★).
-    De {{peak_period_label}} om {{peak_hour}} vraagt om voldoende agent-capaciteit of proactieve FAQ-content op dat moment.
-  </div>
-  <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>4 / 9</span></div>
+  <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>{{page_num_channels_timing}} / {{report_page_total}}</span></div>
 </section>
 
-<section class="slide">
+<section class="slide slide-bereikbaarheid">
   <div class="topbar">
     <div class="logo"><svg class="mom-logo" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 429.8 59.7">
   <defs>
@@ -720,27 +1195,14 @@
   </div>
   <div class="eyebrow">Bereikbaarheid</div>
   <h1>Wanneer vinden gesprekken plaats?</h1>
-  <div class="body" style="flex-direction:row;gap:22px;padding-top:14px">
-    <div class="card" style="flex:1;min-width:0;padding:20px 24px;display:flex;flex-direction:column">
-      <div style="font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:12px">Gesprekken per tijdstip · {{date_range}}</div>
-      <svg viewBox="0 0 480 320" style="width:100%;flex:1" xmlns="http://www.w3.org/2000/svg">
-        {{chart_slide5_inner}}
-      </svg>
-    </div>
-    <div style="width:260px;flex-shrink:0;display:flex;flex-direction:column;gap:14px">
-      <div class="card" style="flex:1">
-        <div class="lbl"><i data-lucide="messages-square" class="ic"></i> Totaal gesprekken</div>
-        <div class="num">{{stats_conversations_total}}</div>
-        <div class="sub">Inclusief {{stats_pct_outside_office}}% buiten kantooruren (ma–vr 9–17)</div>
-      </div>
-      <div class="card" style="flex:1">
-        <div class="lbl"><i data-lucide="message-circle" class="ic"></i> Kanalen</div>
-        <div class="sub" style="margin-top:4px;font-size:14px;line-height:1.6;color:#444">{{dominant_channel}} is het dominante kanaal ({{dominant_channel_pct}}%). WhatsApp ({{channel_whatsapp_pct}}%) en chat vullen elkaar aan — ook buiten reguliere werktijden.</div>
-      </div>
-    </div>
+  <div class="body">
+    <div class="insight bereikbaarheid-intro">{{bereikbaarheid_insight}}</div>
+    {{office_hours_charts}}
   </div>
-  <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>5 / 9</span></div>
+  <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>{{page_num_bereikbaarheid}} / {{report_page_total}}</span></div>
 </section>
+
+{{office_hours_channel_slides}}
 
 <section class="slide">
   <div class="topbar">
@@ -786,7 +1248,7 @@
       </svg>
     </div>
   </div>
-  <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>6 / 9</span></div>
+  <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>{{page_num_sentiment}} / {{report_page_total}}</span></div>
 </section>
 
 <section class="slide">
@@ -836,7 +1298,7 @@
       </div>
     </div>
   </div>
-  <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>7 / 9</span></div>
+  <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>{{page_num_unanswered_1}} / {{report_page_total}}</span></div>
 </section>
 
 <section class="slide">
@@ -884,7 +1346,7 @@
       <strong>Key Insight</strong> · {{unanswered_insight}}
     </div>
   </div>
-  <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>8 / 9</span></div>
+  <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>{{page_num_unanswered_2}} / {{report_page_total}}</span></div>
 </section>
 
 <section class="slide">
@@ -926,7 +1388,7 @@
       <strong>Key Insight</strong> · {{answered_questions_insight}}
     </div>
   </div>
-  <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>9 / 9</span></div>
+  <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>{{page_num_value}} / {{report_page_total}}</span></div>
 </section>
 
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>

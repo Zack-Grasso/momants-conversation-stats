@@ -1,9 +1,11 @@
 from datetime import datetime, timezone
 
 from app.ml.intent_labels import (
+    FESTIVAL_INTENT_SLUGS,
     build_intent_text,
     detect_language,
     resolve_intent,
+    resolve_intent_slugs,
 )
 
 
@@ -93,3 +95,15 @@ def test_detect_language_falls_back_for_unsupported_code(monkeypatch):
 def test_detect_language_returns_supported_code(monkeypatch):
     monkeypatch.setattr("langdetect.detect", lambda _text: "nl")
     assert detect_language("Zijn er toiletten?", ["nl", "en", "de", "fr", "es"]) == "nl"
+
+
+def test_festival_profile_contains_event_specific_slugs():
+    assert "tickets" in FESTIVAL_INTENT_SLUGS
+    assert "travel" in FESTIVAL_INTENT_SLUGS
+    assert "lineup" in FESTIVAL_INTENT_SLUGS
+    assert "rules" in FESTIVAL_INTENT_SLUGS
+
+
+def test_resolve_intent_slugs_uses_festival_profile():
+    slugs = resolve_intent_slugs("festival", ["general"])
+    assert slugs == FESTIVAL_INTENT_SLUGS

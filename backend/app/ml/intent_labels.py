@@ -15,6 +15,22 @@ INTENT_SLUGS: list[str] = [
     "general",
 ]
 
+FESTIVAL_INTENT_SLUGS: list[str] = [
+    "tickets",
+    "travel",
+    "lineup",
+    "rules",
+    "refund",
+    "complaint",
+    "product_info",
+    "general",
+]
+
+INTENT_PROFILES: dict[str, list[str]] = {
+    "ecommerce": INTENT_SLUGS,
+    "festival": FESTIVAL_INTENT_SLUGS,
+}
+
 INTENT_DESCRIPTIONS: dict[str, dict[str, str]] = {
     "nl": {
         "refund": "terugbetaling of restitutie",
@@ -26,6 +42,10 @@ INTENT_DESCRIPTIONS: dict[str, dict[str, str]] = {
         "complaint": "een klacht of ontevredenheid",
         "technical_support": "technische ondersteuning",
         "general": "een algemene vraag",
+        "tickets": "tickets of toegangsbewijzen",
+        "travel": "reizen naar het evenement of vervoer",
+        "lineup": "artiesten, line-up of programma",
+        "rules": "festivalregels of wat wel of niet mag",
     },
     "en": {
         "refund": "a refund or reimbursement",
@@ -37,6 +57,10 @@ INTENT_DESCRIPTIONS: dict[str, dict[str, str]] = {
         "complaint": "a complaint or dissatisfaction",
         "technical_support": "technical support",
         "general": "a general question",
+        "tickets": "tickets or entry passes",
+        "travel": "travel to the event or transport",
+        "lineup": "artists, lineup or schedule",
+        "rules": "festival rules or what is allowed",
     },
     "de": {
         "refund": "eine Rückerstattung oder Erstattung",
@@ -48,6 +72,10 @@ INTENT_DESCRIPTIONS: dict[str, dict[str, str]] = {
         "complaint": "eine Beschwerde oder Unzufriedenheit",
         "technical_support": "technischer Support",
         "general": "eine allgemeine Frage",
+        "tickets": "Tickets oder Eintrittskarten",
+        "travel": "Anreise zum Event oder Transport",
+        "lineup": "Künstler, Line-up oder Programm",
+        "rules": "Festivalregeln oder was erlaubt ist",
     },
     "fr": {
         "refund": "un remboursement",
@@ -59,6 +87,10 @@ INTENT_DESCRIPTIONS: dict[str, dict[str, str]] = {
         "complaint": "une plainte ou insatisfaction",
         "technical_support": "le support technique",
         "general": "une question générale",
+        "tickets": "des billets ou des entrées",
+        "travel": "se rendre à l'événement ou le transport",
+        "lineup": "artistes, line-up ou programme",
+        "rules": "règles du festival ou ce qui est autorisé",
     },
     "es": {
         "refund": "un reembolso o devolución",
@@ -70,8 +102,20 @@ INTENT_DESCRIPTIONS: dict[str, dict[str, str]] = {
         "complaint": "una queja o insatisfacción",
         "technical_support": "soporte técnico",
         "general": "una pregunta general",
+        "tickets": "entradas o tickets",
+        "travel": "viajar al evento o transporte",
+        "lineup": "artistas, cartel o programación",
+        "rules": "normas del festival o qué está permitido",
     },
 }
+
+
+def resolve_intent_slugs(profile: str, default_slugs: list[str]) -> list[str]:
+    """Resolve the global intent taxonomy from INTENT_PROFILE or INTENT_LABELS."""
+    if profile and profile in INTENT_PROFILES:
+        return INTENT_PROFILES[profile]
+    return default_slugs
+
 
 HYPOTHESIS_TEMPLATES: dict[str, str] = {
     "nl": "De klantvraag gaat over {}.",

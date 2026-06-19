@@ -43,11 +43,13 @@ class IntentService:
         labeled = 0
         supported_languages = self.settings.intent_supported_language_list
         batch_size = max(1, self.settings.intent_batch_size)
+        intent_slugs = self.settings.intent_slug_list
         logger.info(
-            "Intent labeling started for agent %s (%s conversations, batch=%s)",
+            "Intent labeling started for agent %s (%s conversations, batch=%s, slugs=%s)",
             agent_id,
             total,
             batch_size,
+            ",".join(intent_slugs),
         )
 
         work_by_language: dict[str, list[tuple[int, Conversation, str, int | None]]] = defaultdict(list)
@@ -83,7 +85,9 @@ class IntentService:
                         f"Classifying intent batch {batch_num}/{batch_count} ({len(batch)} conversations)",
                     )
                 try:
-                    labels_scores = self.models.classify_intents_batch(texts, language, stars)
+                    labels_scores = self.models.classify_intents_batch(
+                        texts, language, stars, intent_slugs=intent_slugs
+                    )
                 except Exception:
                     logger.exception("Intent labeling failed for batch (%s items)", len(batch))
                     continue
@@ -117,6 +121,7 @@ class IntentService:
         total = len(clusters)
         supported_languages = self.settings.intent_supported_language_list
         batch_size = max(1, self.settings.intent_batch_size)
+        intent_slugs = self.settings.intent_slug_list
         logger.info("Cluster intent labeling started for job %s (%s clusters)", job_id, total)
 
         work_by_language: dict[str, list[tuple[int, QuestionCluster, str]]] = defaultdict(list)
@@ -133,7 +138,9 @@ class IntentService:
                 batch = items[batch_start : batch_start + batch_size]
                 texts = [item[2] for item in batch]
                 try:
-                    labels_scores = self.models.classify_intents_batch(texts, language)
+                    labels_scores = self.models.classify_intents_batch(
+                        texts, language, intent_slugs=intent_slugs
+                    )
                 except Exception:
                     logger.exception("Cluster intent labeling failed for batch (%s items)", len(batch))
                     continue

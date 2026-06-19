@@ -8,10 +8,17 @@ from app.utils.report_data import (
     aggregate_emotion_timeline,
     aggregate_sentiment_arc,
     build_action_bodies,
+    build_channel_volume_insight,
     build_emotion_timeline_insight,
+    build_bereikbaarheid_insight,
+    build_channel_timing_insight,
+    build_channel_timing_intro,
+    build_channel_timing_stats_html,
     classify_conversation_time_bucket,
     conversation_time_buckets,
+    conversation_time_buckets_by_channel,
     daily_conversation_counts,
+    daily_conversation_counts_by_channel,
     daily_counts_from_momants_stats,
     dominant_channel,
     fetch_momants_report_stats,
@@ -75,6 +82,40 @@ def test_daily_conversation_counts_groups_by_day():
 
     assert len(counts) == 2
     assert sum(counts.values()) == 3
+
+
+def test_daily_conversation_counts_by_channel():
+    day_one = datetime(2026, 3, 1, 9, 0, tzinfo=timezone.utc)
+    conversations = [
+        SimpleNamespace(
+            messages=[SimpleNamespace(source_created_at=day_one, created_at=day_one)],
+            created_at=day_one,
+            integration_type="WhatsApp",
+        ),
+        SimpleNamespace(
+            messages=[SimpleNamespace(source_created_at=day_one.replace(hour=15), created_at=day_one)],
+            created_at=day_one,
+            integration_type="Embedded chat",
+        ),
+    ]
+
+    by_channel = daily_conversation_counts_by_channel(conversations)
+
+    assert by_channel["whatsapp"][day_one.replace(hour=0, minute=0, second=0, microsecond=0)] == 1
+    assert by_channel["chat"][day_one.replace(hour=0, minute=0, second=0, microsecond=0)] == 1
+
+
+def test_build_channel_volume_insight_notes_shared_peak_day():
+    day = datetime(2026, 5, 24, tzinfo=timezone.utc)
+    day_key = day.replace(hour=0, minute=0, second=0, microsecond=0)
+    by_channel = {
+        "whatsapp": {day_key: 2000},
+        "chat": {day_key: 300},
+    }
+    insight = build_channel_volume_insight(by_channel, {"whatsapp": 2000, "chat": 300})
+
+    assert "zelfde dag" in insight
+    assert "WhatsApp" in insight
 
 
 def test_hourly_conversation_counts_tracks_peak_hour():
@@ -284,6 +325,34 @@ def test_classify_conversation_time_bucket():
     assert classify_conversation_time_bucket(evening) == "na_kantooruren"
     assert classify_conversation_time_bucket(night) == "nacht"
     assert classify_conversation_time_bucket(weekend) == "weekend"
+
+
+def test_summarize_office_hours_groups_outside_buckets():
+    from app.utils.report_data import outside_office_buckets, pct_outside_office, summarize_office_hours
+
+    buckets = {"kantooruren": 40, "na_kantooruren": 30, "nacht": 20, "weekend": 10}
+    summary = summarize_office_hours(buckets)
+
+    assert summary == {"kantooruren": 40, "buiten_kantooruren": 60}
+    assert outside_office_buckets(buckets) == {
+        "na_kantooruren": 30,
+        "nacht": 20,
+        "weekend": 10,
+    }
+    assert pct_outside_office(buckets) == 60.0
+
+
+def test_build_channel_timing_insight_mentions_peak_channel_share():
+    insight = build_channel_timing_insight(
+        {"whatsapp": 80, "chat": 20},
+        {"whatsapp": {13: 40}, "chat": {13: 10}},
+        13,
+        22.5,
+        100,
+    )
+
+    assert "13:00" in insight
+    assert "WhatsApp" in insight
 
 
 def test_conversation_time_buckets_groups_conversations():

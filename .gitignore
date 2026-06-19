@@ -23,6 +23,8 @@ Thumbs.db
 # Docker
 postgres_data/
 hf_cache/
+preview/report.html
+preview/snapshot.json
 
 # Test / coverage
 .pytest_cache/

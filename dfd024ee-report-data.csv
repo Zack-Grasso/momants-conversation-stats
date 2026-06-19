@@ -1,0 +1,297 @@
+section,field,value
+meta,agent_id,dfd024ee-bb51-4e48-9e2e-fb8fbc5f80ea
+meta,event_name,Harmony of Hardcore
+meta,chart_source,local
+meta,charts_generated,True
+variable,event_name,Harmony of Hardcore
+variable,conversations_total,9944
+variable,avg_sentiment_label,neutraal
+variable,dominant_mood,verlangen
+variable,date_range,8 mei – 16 jun
+variable,messages_total,41381
+variable,pct_resolved,95
+variable,pct_referred,5
+variable,avg_start_stars,3
+variable,avg_end_stars,3.1
+variable,channel_whatsapp_count,7270
+variable,channel_chat_count,2674
+variable,channel_instagram_count,0
+variable,avg_stars,3
+variable,avg_delta_stars,0.1
+variable,peak_day_name,24 mei
+variable,peak_day_count,2650
+variable,peak_day_label,zondag
+variable,avg_conversations_per_day,248.6
+variable,peak_hour,13:00
+variable,peak_hour_avg,22.6
+variable,peak_hour_range,13:00–14:00
+variable,peak_period_label,middagpiek
+variable,channel_whatsapp_pct,73
+variable,channel_chat_pct,27
+variable,channel_instagram_pct,0
+variable,sentiment_whatsapp,3
+variable,sentiment_chat,3
+variable,sentiment_instagram,—
+variable,dominant_channel,WhatsApp
+variable,dominant_channel_pct,73
+variable,highest_sentiment_channel,WhatsApp
+variable,highest_sentiment_score,3
+variable,pct_trajectory_improving,10
+variable,pct_trajectory_declining,2
+variable,pct_trajectory_mixed,2
+variable,total_unanswered_questions,943
+variable,pct_unanswered,5
+variable,unanswered_insight,"936 van 943 onbeantwoorde vragen (99%) hadden een onvoldoende respons — dat is 5% van alle vragen van mensen. Verrijk de kennisbank zodat de agent de vraag volledig afdekt. Voorbeeld: ""Wat zegt een duif""."
+variable,answered_questions_insight,De meest gestelde vraag (“Hoe kom ik bij het festival? 🚌”) kwam 110× voor en werd door de agent beantwoord. In totaal 18 unieke vragen (552×) werden goed afgehandeld — sterke kandidaten voor FAQ en agent-training.
+variable,unanswered_no_reply_count,7
+variable,unanswered_weak_answer_count,936
+variable,unanswered_semantic_count,0
+variable,pct_depth_shallow,82
+variable,pct_depth_medium,17
+variable,pct_depth_deep,2
+variable,median_response_fmt,5s
+variable,avg_first_response_fmt,11s
+variable,p95_response_fmt,9s
+variable,avg_depth_ratio,1
+variable,lowest_sentiment_channel,WhatsApp
+variable,lowest_sentiment_score,3
+variable,stats_conversations_total,9.945
+variable,stats_hours_saved,829
+variable,stats_support_cost_saved,€21k
+variable,stats_assisted_revenue,—
+variable,stats_direct_revenue,—
+variable,stats_total_value,€21k
+variable,stats_pct_outside_office,70.1
+fragment,channels_sentence,WhatsApp en Chat
+fragment,channel_pills,WhatsApp 7270 Chat 2674
+fragment,channel_breakdown_rows,WhatsApp 7270 73% Chat 2674 27%
+fragment,channel_sentiment_cols,3 / 5 WhatsApp 3 / 5 Chat
+fragment,chart_slide2_inner,0 662 1324 1986 2648 Piek: 24 mei 8 mei 14 mei 20 mei 26 mei 1 jun 7 jun 16 jun
+fragment,chart_slide3_inner,00 04 08 12 16 20 piek
+fragment,chart_slide4_inner,1★ 2★ 3★ 4★ 5★ bericht 1 3 5 7 9 10
+fragment,chart_slide5_inner,Tijdens kantooruren 29.9% · 2.970 Na kantooruren 20.2% · 2.011 Nacht 11.9% · 1.179 Weekend 38.1% · 3.784
+fragment,unanswered_examples_page1,"""Wat zegt een duif"" ""Kan ik mijn munten terugsturen en geld terug krijgen"" ""Wat mag ik meenemen? 🎒"" ""Qui sont les artistes programmés ? 🎤"" ""Hoe laat is het afgelopen"" ""Is gewoon adverteren voor niks"" ""Kan het niet vinden"" ""Hoeveel kaarten zijn er?"" ""wat een kut systeem!"" ""You mean 28 mei?"" ""Wat kost een larkeericket"" ""No hay posibilidad de entradas vip??"" ""Ou ce situe le site ?"" ""Wer ist dabei? 🎤"" ""Hoe word ik ambassadeur"" ""Volgend jaar doen? 🤭🕺"" ""Why can I not order?"" ""Is er nog restock van ..."
+fragment,unanswered_examples_page2,"""Wat een tijdverspilling. Voorboiet snot naar een wachtrij kijken. Mij nooit meer mailen met deze on…"" ""Kam gevonden?"" ""stond headhunterz op de line up?"" ""Hoe kan het zo zijn dat er eerst 10 minuten wachttijd stond en nu opeens 1uur?"" ""Moet ik halen?"" ""in email of whatsapp?"" ""Wat is dit voor onzin ? 1 minuut wachtrij en daarna meer dan een uur ????"" ""Toch wel?"" ""Und wie viele Tage ?"" ""oq vc acha do chatgpt?"" ""e sobre o gemini ent?"" ""e o chatgpt?"" ""e o gemini?"" ""quais os patrocinadores do fest..."
+fragment,answered_questions_grid,"Vraag #1 110× ""Hoe kom ik bij het festival? 🚌"" Vraag #2 93× ""Wat mag ik meenemen"" Vraag #3 78× ""Waar kan ik tickets kopen? 🎟️"" Vraag #4 56× ""Wat zijn de festivalregels? 📋"" Vraag #5 35× ""Comment me rendre au festival ? 🚌"" Vraag #6 26× ""Wie komme ich zum Festival? 🚌"" Vraag #7 19× ""Où puis-je acheter des billets ? 🎟️"" Vraag #8 18× ""Mag ik zonnebrand meenemen"" Vraag #9 18× ""Welche Festivalregeln gelten? 📋"" Vraag #10 17× ""Que puis-je apporter ? 🎒"" Vraag #11 16× ""Wo kann ich Tickets kaufen? 🎟️"" Vra..."
+daily_conversations,2026-05-08,18
+daily_conversations,2026-05-09,30
+daily_conversations,2026-05-10,35
+daily_conversations,2026-05-11,55
+daily_conversations,2026-05-12,62
+daily_conversations,2026-05-13,57
+daily_conversations,2026-05-14,85
+daily_conversations,2026-05-15,63
+daily_conversations,2026-05-16,89
+daily_conversations,2026-05-17,117
+daily_conversations,2026-05-18,237
+daily_conversations,2026-05-19,246
+daily_conversations,2026-05-20,354
+daily_conversations,2026-05-21,318
+daily_conversations,2026-05-22,771
+daily_conversations,2026-05-23,835
+daily_conversations,2026-05-24,2650
+daily_conversations,2026-05-25,2380
+daily_conversations,2026-05-26,1233
+daily_conversations,2026-05-27,91
+daily_conversations,2026-05-28,51
+daily_conversations,2026-05-29,25
+daily_conversations,2026-05-30,16
+daily_conversations,2026-05-31,22
+daily_conversations,2026-06-01,12
+daily_conversations,2026-06-02,13
+daily_conversations,2026-06-03,9
+daily_conversations,2026-06-04,12
+daily_conversations,2026-06-05,7
+daily_conversations,2026-06-06,4
+daily_conversations,2026-06-07,4
+daily_conversations,2026-06-08,4
+daily_conversations,2026-06-09,6
+daily_conversations,2026-06-10,10
+daily_conversations,2026-06-11,5
+daily_conversations,2026-06-12,3
+daily_conversations,2026-06-13,5
+daily_conversations,2026-06-14,5
+daily_conversations,2026-06-15,4
+daily_conversations,2026-06-16,1
+hourly_conversations,00:00,142
+hourly_conversations,01:00,106
+hourly_conversations,02:00,66
+hourly_conversations,03:00,64
+hourly_conversations,04:00,143
+hourly_conversations,05:00,231
+hourly_conversations,06:00,372
+hourly_conversations,07:00,405
+hourly_conversations,08:00,588
+hourly_conversations,09:00,639
+hourly_conversations,10:00,636
+hourly_conversations,11:00,604
+hourly_conversations,12:00,568
+hourly_conversations,13:00,904
+hourly_conversations,14:00,736
+hourly_conversations,15:00,549
+hourly_conversations,16:00,625
+hourly_conversations,17:00,639
+hourly_conversations,18:00,489
+hourly_conversations,19:00,443
+hourly_conversations,20:00,396
+hourly_conversations,21:00,308
+hourly_conversations,22:00,172
+hourly_conversations,23:00,119
+sentiment_arc,message_1,3.0
+sentiment_arc,message_2,3.0
+sentiment_arc,message_3,3.4
+sentiment_arc,message_4,3.3
+sentiment_arc,message_5,3.2
+sentiment_arc,message_6,3.1
+sentiment_arc,message_7,3.1
+sentiment_arc,message_8,3.1
+sentiment_arc,message_9,3.0
+sentiment_arc,message_10,3.0
+office_hours,kantooruren,2970
+office_hours,na_kantooruren,2011
+office_hours,nacht,1179
+office_hours,weekend,3784
+unanswered_question,1,Wat zegt een duif
+unanswered_question,2,Kan ik mijn munten terugsturen en geld terug krijgen
+unanswered_question,3,Wat mag ik meenemen? 🎒
+unanswered_question,4,Qui sont les artistes programmés ? 🎤
+unanswered_question,5,Hoe laat is het afgelopen
+unanswered_question,6,Is gewoon adverteren voor niks
+unanswered_question,7,Kan het niet vinden
+unanswered_question,8,Hoeveel kaarten zijn er?
+unanswered_question,9,wat een kut systeem!
+unanswered_question,10,You mean 28 mei?
+unanswered_question,11,Wat kost een larkeericket
+unanswered_question,12,No hay posibilidad de entradas vip??
+unanswered_question,13,Ou ce situe le site ?
+unanswered_question,14,Wer ist dabei? 🎤
+unanswered_question,15,Hoe word ik ambassadeur
+unanswered_question,16,Volgend jaar doen? 🤭🕺
+unanswered_question,17,Why can I not order?
+unanswered_question,18,Is er nog restock van merch?
+unanswered_question,19,"Wat een tijdverspilling.
+Voorboiet snot naar een wachtrij kijken.
+Mij nooit meer mailen met deze onzin"
+unanswered_question,20,Kam gevonden?
+unanswered_question,21,stond headhunterz op de line up?
+unanswered_question,22,Hoe kan het zo zijn dat er eerst 10 minuten wachttijd stond en nu opeens 1uur?
+unanswered_question,23,Moet ik halen?
+unanswered_question,24,in email of whatsapp?
+unanswered_question,25,Wat is dit voor onzin ? 1 minuut wachtrij en daarna meer dan een uur ????
+unanswered_question,26,Toch wel?
+unanswered_question,27,Und wie viele Tage ?
+unanswered_question,28,oq vc acha do chatgpt?
+unanswered_question,29,e sobre o gemini ent?
+unanswered_question,30,e o chatgpt?
+unanswered_question,31,e o gemini?
+unanswered_question,32,quais os patrocinadores do festival?
+unanswered_question,33,"Bonjour 
+Vous m’avez filmée en train de danser le hakken comment pourrai je avoir les vidéos ??"
+unanswered_question,34,Ab wann kann ich kaufen?
+unanswered_question,35,Are you a ai chatbot?
+unanswered_question,36,Waar kan ik de foto's vinden
+unanswered_question,37,Waar te vinden
+unanswered_question,38,Chi farà parte della scaletta? 🎤
+unanswered_question,39,Hast du denn welche ?
+unanswered_question,40,An wen kann ich mich denn wenden?
+unanswered_question,41,"You’re successfully registered 🎉
+This Tuesday around 19:00, we’ll send you a link to the ticket shop.
+
+Tuesday it’s tomorrow ?"
+unanswered_question,42,¿Quiénes están en el cartel? 🎤
+unanswered_question,43,How to become part of the lineup
+unanswered_question,44,"I haven't received the link by email yet, is that normal?."
+unanswered_question,45,Hoe kom ik bij het festival? 🚌
+unanswered_question,46,Mag ik de link ?
+unanswered_question,47,Dedicated sale ?
+unanswered_question,48,Waar blijft m’n link?
+unanswered_question,49,It's Go on ?
+unanswered_question,50,Wanneer krijg je de mail
+unanswered_question,51,Klopt het dat ik nog geen mail heb ontvangen?
+unanswered_question,52,Goedenavond klopt het dat dit allen regulier is en geen vip?
+unanswered_question,53,Kan je me vertellen waar die staat dan want er stond net geen vip tussen .op alle 3 de telefoons niet
+unanswered_question,54,Hoe kom ik gratis binnen?
+unanswered_question,55,Kan dus niet
+unanswered_question,56,Waneer komt de link ?
+unanswered_question,57,In deze app ?
+unanswered_question,58,Is er een levensstijd aan Dit festival
+unanswered_question,59,Kann ich die seite auch auf deusch haben?
+unanswered_question,60,Krijg ik zo een link?
+unanswered_question,61,KAn ik ook kolven
+unanswered_question,62,Is dit de persoonlijke link?
+unanswered_question,63,Wer ist dabei? 🎤
+unanswered_question,64,Kunnen jullie me iets vertellen over de dedicated sale die er nu aankomt?
+unanswered_question,65,Wat een ellende van 3 naar 15 naar 1 uur naar 5 min naar 30 min? Wat is dit voor wachtrij mensen?
+unanswered_question,66,Hoe is het mannen
+unanswered_question,67,Heeft u de link
+unanswered_question,68,Can you tell me a fun story
+unanswered_question,69,Can he app yoy
+unanswered_question,70,Where is hte link you should sent?
+unanswered_question,71,Are you computer
+unanswered_question,72,Vip tickets ?
+unanswered_question,73,Kan ik mijn ticket later upgrade?
+unanswered_question,74,On WhatsApp?
+unanswered_question,75,Wie staan er op de line-up? 🎤
+unanswered_question,76,Ich habe keine Email erhalten. Was soll ich machen?
+unanswered_question,77,No just this number no email ?
+unanswered_question,78,How long is the link working
+unanswered_question,79,Datum volgende jaar?
+unanswered_question,80,Waar zijn gevonden voorwerpen
+unanswered_question,81,Wie geht es dem mann der im azura deck reanimiert wurde?
+unanswered_question,82,Wat mag ik meenemen? 🎒
+unanswered_question,83,waar kan ik de fotos vinden
+unanswered_question,84,Krijg page not found als ik dat doe via de link op de site
+unanswered_question,85,For both emails ?
+unanswered_question,86,Ben jij AI of een echt persoon?
+unanswered_question,87,Is het op 15 mei?
+unanswered_question,88,Is het op 15 mei?
+unanswered_question,89,What is the address
+unanswered_question,90,Ook voor 7th sunday?
+unanswered_question,91,Hoe word je ambasadeur van jullie ik ben ook ambasadeur alleen mijn vriendin wil da ook graag worden is dat mogelijk?
+unanswered_question,92,Bonjour quand va t’il avoir du réassort sur les marchandises?
+unanswered_question,93,Kan dit in Nederlands?
+unanswered_question,94,"Hi, ik ben een telefoon kwijt geraakt op hoh, staan er ook ergens foto’s van de gevonden voorwerpen?"
+unanswered_question,95,Where was it
+unanswered_question,96,"Hey you 🍀☀️ had an awesome saturday. I made a selfi with a guy and i forgot to ask for his insta. When u post this pic in your story. Perhaps he see it 😇😊 could u do it?
+
+My insta is jennifer.brucher"
+unanswered_question,97,The insta Page from hoh?
+unanswered_question,98,Waar is dit
+unanswered_question,99,ca dure combien de temps ?
+unanswered_question,100,Is the e-mail
+answered_question,rank_1_frequency,110
+answered_question,rank_1_text,Hoe kom ik bij het festival? 🚌
+answered_question,rank_2_frequency,93
+answered_question,rank_2_text,Wat mag ik meenemen
+answered_question,rank_3_frequency,78
+answered_question,rank_3_text,Waar kan ik tickets kopen? 🎟️
+answered_question,rank_4_frequency,56
+answered_question,rank_4_text,Wat zijn de festivalregels? 📋
+answered_question,rank_5_frequency,35
+answered_question,rank_5_text,Comment me rendre au festival ? 🚌
+answered_question,rank_6_frequency,26
+answered_question,rank_6_text,Wie komme ich zum Festival? 🚌
+answered_question,rank_7_frequency,19
+answered_question,rank_7_text,Où puis-je acheter des billets ? 🎟️
+answered_question,rank_8_frequency,18
+answered_question,rank_8_text,Mag ik zonnebrand meenemen
+answered_question,rank_9_frequency,18
+answered_question,rank_9_text,Welche Festivalregeln gelten? 📋
+answered_question,rank_10_frequency,17
+answered_question,rank_10_text,Que puis-je apporter ? 🎒
+answered_question,rank_11_frequency,16
+answered_question,rank_11_text,Wo kann ich Tickets kaufen? 🎟️
+answered_question,rank_12_frequency,12
+answered_question,rank_12_text,Wie staan er op de line-up? 🎤
+answered_question,rank_13_frequency,11
+answered_question,rank_13_text,Was kann ich mitbringen? 🎒
+answered_question,rank_14_frequency,10
+answered_question,rank_14_text,Was darf ich mitbringen? 🎒
+answered_question,rank_15_frequency,9
+answered_question,rank_15_text,🎟️ Kan ik al tickets kopen?
+answered_question,rank_16_frequency,8
+answered_question,rank_16_text,How do I get to the festival? 🚌
+answered_question,rank_17_frequency,8
+answered_question,rank_17_text,Mag je zonnebrand meenemen
+answered_question,rank_18_frequency,8
+answered_question,rank_18_text,What are the festival rules? 📋

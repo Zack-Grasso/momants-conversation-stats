@@ -95,6 +95,15 @@ def _clamp(value: float, low: float, high: float) -> float:
     return max(low, min(high, value))
 
 
+def _sqrt_y(value: float, max_val: float, plot_bottom: float, plot_h: float) -> float:
+    """Map a value to plot Y using sqrt scaling so low/mid days stay visible beside spikes."""
+    import math
+
+    if max_val <= 0 or value <= 0:
+        return plot_bottom
+    return plot_bottom - (math.sqrt(value) / math.sqrt(max_val)) * plot_h
+
+
 def _badge_rect_x(center_x: float, width: float, plot_left: float, plot_right: float) -> float:
     return _clamp(center_x - width / 2, plot_left, plot_right - width)
 
@@ -148,13 +157,22 @@ def daily_volume_chart_svg(
     daily_counts: dict[datetime, int],
     peak_day: datetime | None = None,
     *,
-    width: int = 800,
-    height: int = 210,
+    width: int = 1280,
+    height: int = 340,
+    gradient_id: str = "vg",
+    clip_suffix: str = "volume",
+    compact: bool = False,
 ) -> str:
+    if compact:
+        height = 240
     plot_left, plot_right = 56, width - 20
-    plot_top, plot_bottom = 24, 168
-    x_label_y = plot_bottom + 18
+    if compact:
+        plot_top, plot_bottom = 44, 210
+    else:
+        plot_top, plot_bottom = 52, max(300, height - 42)
+    x_label_y = plot_bottom + 22
     plot_h = plot_bottom - plot_top
+    clip_id = f"plot-clip-{clip_suffix}"
 
     if not daily_counts:
         return (
@@ -165,28 +183,38 @@ def daily_volume_chart_svg(
     days = sorted(daily_counts.keys())
     values = [daily_counts[day] for day in days]
     max_val = max(values) or 1
-    ticks = _dedupe_ticks_by_y(_nice_ticks(max_val), max_val, plot_bottom, plot_h)
+    raw_ticks = _nice_ticks(max_val)
+    seen_y: set[int] = set()
+    ticks: list[int] = []
+    for tick in raw_ticks:
+        y_key = round(_sqrt_y(float(tick), float(max_val), plot_bottom, plot_h))
+        if y_key in seen_y:
+            continue
+        seen_y.add(y_key)
+        ticks.append(tick)
 
     parts: list[str] = []
     y_label_x = 44
 
     for tick in ticks:
-        y = plot_bottom - (tick / max_val) * plot_h
+        y = _sqrt_y(float(tick), float(max_val), plot_bottom, plot_h)
         _h_grid(parts, y, plot_left, plot_right)
         parts.append(_y_axis_label(y_label_x, y + 4, str(tick)))
 
     points: list[tuple[float, float]] = []
     for index, day in enumerate(days):
         x = _plot_x(index, len(days), plot_left, plot_right)
-        y = plot_bottom - (daily_counts[day] / max_val) * plot_h
+        y = _sqrt_y(float(daily_counts[day]), float(max_val), plot_bottom, plot_h)
         points.append((x, y))
 
     area_points = " ".join(f"{x:.1f},{y:.1f}" for x, y in points)
     area_points += f" {points[-1][0]:.1f},{plot_bottom} {points[0][0]:.1f},{plot_bottom}"
     line_points = " ".join(f"{x:.1f},{y:.1f}" for x, y in points)
 
-    _plot_clip_open(parts, "plot-clip-volume", plot_left, plot_right, plot_top, plot_bottom)
-    parts.append(f'<polygon fill="url(#vg)" points="{area_points}"/>')
+    _plot_clip_open(parts, clip_id, plot_left, plot_right, plot_top, plot_bottom)
+    parts.append(f'<polygon fill="url(#{gradient_id})" points="{area_points}"/>')
+    _plot_clip_close(parts)
+
     parts.append(
         f'<polyline fill="none" stroke="#151515" stroke-width="2.2" stroke-linejoin="round" '
         f'stroke-linecap="round" points="{line_points}"/>'
@@ -197,19 +225,26 @@ def daily_volume_chart_svg(
     peak_index = days.index(peak_day) if peak_day in days else values.index(max(values))
     peak_x, peak_y = points[peak_index]
     parts.append(f'<circle cx="{peak_x:.1f}" cy="{peak_y:.1f}" r="5" fill="#151515"/>')
-    _plot_clip_close(parts)
 
     peak_label = escape(format_short_date(peak_day))
     badge_w = 88
     badge_h = 17
     badge_x = _badge_rect_x(peak_x, badge_w, plot_left, plot_right)
-    badge_y = _clamp(peak_y - 22, plot_top + 2, plot_bottom - badge_h - 4)
-    if badge_y >= plot_top + 2:
-        parts.append(f'<rect x="{badge_x:.1f}" y="{badge_y:.1f}" width="{badge_w}" height="{badge_h}" rx="4" fill="#151515"/>')
+    badge_gap = 10
+    preferred_badge_y = peak_y - badge_h - badge_gap
+    if preferred_badge_y >= 4:
+        badge_y = preferred_badge_y
+    else:
+        badge_y = 4
         parts.append(
-            f'<text x="{badge_x + badge_w / 2:.1f}" y="{badge_y + 11:.1f}" font-family="Inter" font-size="10.5" '
-            f'fill="#E2F5C9" text-anchor="middle" font-weight="700">Piek: {peak_label}</text>'
+            f'<line x1="{peak_x:.1f}" y1="{badge_y + badge_h:.1f}" x2="{peak_x:.1f}" y2="{peak_y - 6:.1f}" '
+            f'stroke="#151515" stroke-width="1.2" stroke-dasharray="3 2"/>'
         )
+    parts.append(f'<rect x="{badge_x:.1f}" y="{badge_y:.1f}" width="{badge_w}" height="{badge_h}" rx="4" fill="#151515"/>')
+    parts.append(
+        f'<text x="{badge_x + badge_w / 2:.1f}" y="{badge_y + 11:.1f}" font-family="Inter" font-size="10.5" '
+        f'fill="#E2F5C9" text-anchor="middle" font-weight="700">Piek: {peak_label}</text>'
+    )
 
     def label_x(index: int) -> float:
         return _x_label_x(index, len(days), plot_left, plot_right)
@@ -223,6 +258,150 @@ def daily_volume_chart_svg(
 
     _plot_frame(parts, plot_left=plot_left, plot_right=plot_right, plot_top=plot_top, plot_bottom=plot_bottom)
     return "\n        ".join(parts)
+
+
+def build_channel_volume_chart_html(
+    channel: str,
+    by_channel: dict[str, dict[datetime, int]],
+    all_days: list[datetime],
+    channel_counts: dict[str, int],
+) -> str:
+    from app.utils.report_data import CHANNEL_DISPLAY, align_daily_counts
+    from app.utils.report_format import format_dutch_int
+
+    cfg = CHANNEL_DISPLAY[channel]
+    aligned = align_daily_counts(all_days, by_channel.get(channel, {}))
+    peak_day = None
+    if any(aligned.values()):
+        peak_day, peak_count = max(aligned.items(), key=lambda item: item[1])
+        if peak_count <= 0:
+            peak_day = None
+    total = channel_counts.get(channel, 0)
+    svg_height = 380
+    chart_inner = daily_volume_chart_svg(
+        aligned,
+        peak_day,
+        width=1280,
+        height=svg_height,
+        gradient_id=f"vg-{channel}",
+        clip_suffix=f"vol-{channel}",
+        compact=False,
+    )
+    return (
+        f'<div class="card volume-chart-card channel-volume-single">'
+        f'<div class="channel-volume-head">'
+        f'<span class="channel-volume-name">{escape(cfg["label"])}</span>'
+        f'<span class="channel-volume-meta">{format_dutch_int(total)} gesprekken</span>'
+        f"</div>"
+        f'<svg viewBox="0 0 1280 {svg_height}" style="overflow:visible;width:100%;flex:1" '
+        f'xmlns="http://www.w3.org/2000/svg">'
+        f"<defs>"
+        f'<linearGradient id="vg-{channel}" x1="0" y1="0" x2="0" y2="1">'
+        f'<stop offset="0%" stop-color="#E2F5C9" stop-opacity=".85"/>'
+        f'<stop offset="100%" stop-color="#E2F5C9" stop-opacity="0"/>'
+        f"</linearGradient></defs>"
+        f"{chart_inner}"
+        f"</svg></div>"
+    )
+
+
+def build_channel_volume_slides_html(
+    by_channel: dict[str, dict[datetime, int]],
+    all_days: list[datetime],
+    channel_counts: dict[str, int],
+    *,
+    event_name: str,
+    date_range: str,
+    insight: str,
+    page_start: int,
+    total_pages: int,
+) -> str:
+    from app.utils.report_data import CHANNEL_DISPLAY, active_channels
+
+    active = active_channels(channel_counts)
+    if not all_days or not active:
+        return ""
+
+    slides: list[str] = []
+    for index, channel in enumerate(active):
+        page_num = page_start + index
+        label = CHANNEL_DISPLAY[channel]["label"]
+        chart = build_channel_volume_chart_html(channel, by_channel, all_days, channel_counts)
+        insight_block = (
+            f'<div class="insight channel-volume-insight">{escape(insight)}</div>' if index == 0 else ""
+        )
+        slides.append(
+            f'<section class="slide slide-channel-volume">'
+            f'<div class="topbar"><div class="logo"><span class="mom-logo-text">momants</span></div>'
+            f'<div class="doc">{escape(event_name)} · Conversation Analysis</div></div>'
+            f'<div class="eyebrow">Gespreksvolume · per kanaal</div>'
+            f'<h1>{escape(label)}</h1>'
+            f'<div class="body">{insight_block}{chart}</div>'
+            f'<div class="footer"><span>{escape(event_name)} · Conversation Analysis {escape(date_range)} · Momants</span>'
+            f"<span>{page_num} / {total_pages}</span></div>"
+            f"</section>"
+        )
+    return "".join(slides)
+
+
+def build_channel_volume_charts_html(
+    by_channel: dict[str, dict[datetime, int]],
+    all_days: list[datetime],
+    channel_counts: dict[str, int],
+) -> str:
+    from app.utils.report_data import CHANNEL_DISPLAY, active_channels, align_daily_counts
+    from app.utils.report_format import format_dutch_int
+
+    active = active_channels(channel_counts)
+    if not all_days:
+        return (
+            '<div class="channel-volume-grid cols-1">'
+            '<div class="channel-volume-item">'
+            '<p style="color:#bbb;font-size:13px">Geen gespreksdata per kanaal</p>'
+            "</div></div>"
+        )
+
+    channel_total = len(active)
+    grid_class = "cols-1" if channel_total == 1 else ("cols-2" if channel_total == 2 else "cols-3")
+    compact = channel_total > 1
+    svg_height = 240 if compact else 340
+    items: list[str] = []
+
+    for channel in active:
+        cfg = CHANNEL_DISPLAY[channel]
+        aligned = align_daily_counts(all_days, by_channel.get(channel, {}))
+        peak_day = None
+        if any(aligned.values()):
+            peak_day, peak_count = max(aligned.items(), key=lambda item: item[1])
+            if peak_count <= 0:
+                peak_day = None
+        total = channel_counts.get(channel, 0)
+        chart_inner = daily_volume_chart_svg(
+            aligned,
+            peak_day,
+            width=1280,
+            height=svg_height,
+            gradient_id=f"vg-{channel}",
+            clip_suffix=f"vol-{channel}",
+            compact=compact,
+        )
+        items.append(
+            f'<div class="channel-volume-item">'
+            f'<div class="channel-volume-head">'
+            f'<span class="channel-volume-name">{escape(cfg["label"])}</span>'
+            f'<span class="channel-volume-meta">{format_dutch_int(total)} gesprekken</span>'
+            f"</div>"
+            f'<svg viewBox="0 0 1280 {svg_height}" style="overflow:visible" xmlns="http://www.w3.org/2000/svg">'
+            f"<defs>"
+            f'<linearGradient id="vg-{channel}" x1="0" y1="0" x2="0" y2="1">'
+            f'<stop offset="0%" stop-color="#E2F5C9" stop-opacity=".85"/>'
+            f'<stop offset="100%" stop-color="#E2F5C9" stop-opacity="0"/>'
+            f"</linearGradient></defs>"
+            f"{chart_inner}"
+            f"</svg></div>"
+        )
+
+    return f'<div class="channel-volume-grid {grid_class}">{"".join(items)}</div>'
 
 
 def hourly_bars_chart_svg(
@@ -463,6 +642,267 @@ def _pie_slice_path(cx: float, cy: float, radius: float, start_deg: float, end_d
         f"M {cx:.2f} {cy:.2f} L {x1:.2f} {y1:.2f} "
         f"A {radius} {radius} 0 {large_arc} 1 {x2:.2f} {y2:.2f} Z"
     )
+
+
+def _render_pie_column(
+    parts: list[str],
+    buckets: dict[str, int],
+    *,
+    order: tuple[str, ...],
+    labels: dict[str, str],
+    colors: dict[str, str],
+    cx: float,
+    cy: float,
+    radius: float,
+    legend_title: str | None = None,
+    legend_order: tuple[str, ...] | None = None,
+    compact: bool = False,
+) -> None:
+    total = sum(buckets.get(key, 0) for key in order)
+    if total <= 0:
+        return
+
+    title_y = cy - radius - (14 if compact else 18)
+    if legend_title:
+        parts.append(
+            f'<text x="{cx:.1f}" y="{title_y:.1f}" font-family="Inter" font-size="{10 if compact else 11}" '
+            f'fill="#888" font-weight="600" text-anchor="middle">{escape(legend_title)}</text>'
+        )
+
+    angle = -90.0
+    for key in order:
+        value = buckets.get(key, 0)
+        if value <= 0:
+            continue
+        sweep = 360.0 * value / total
+        path = _pie_slice_path(cx, cy, radius, angle, angle + sweep)
+        if path:
+            color = colors.get(key, "#cbd5e1")
+            parts.append(f'<path d="{path}" fill="{color}" stroke="#fff" stroke-width="{1.5 if compact else 2}"/>')
+        angle += sweep
+
+    legend_y = cy + radius + (18 if compact else 22)
+    legend_x = cx - (58 if compact else 68)
+    row_h = 30.0 if compact else 36.0
+    for key in legend_order or order:
+        value = buckets.get(key, 0)
+        if value <= 0:
+            continue
+        pct = round(100 * value / total, 1)
+        color = colors.get(key, "#cbd5e1")
+        name = escape(labels.get(key, key))
+        parts.append(f'<rect x="{legend_x:.1f}" y="{legend_y:.1f}" width="10" height="10" rx="2" fill="{color}"/>')
+        parts.append(
+            f'<text x="{legend_x + 16:.1f}" y="{legend_y + 9:.1f}" font-family="Inter" '
+            f'font-size="{10 if compact else 11}" fill="#444">{name}</text>'
+        )
+        count_label = f"{value:,}".replace(",", ".")
+        parts.append(
+            f'<text x="{legend_x + 16:.1f}" y="{legend_y + 21:.1f}" font-family="Inter" '
+            f'font-size="{9 if compact else 10}" fill="#888">{pct:g}% · {count_label}</text>'
+        )
+        legend_y += row_h
+
+
+def _render_pie_with_legend(
+    parts: list[str],
+    buckets: dict[str, int],
+    *,
+    order: tuple[str, ...],
+    labels: dict[str, str],
+    colors: dict[str, str],
+    cx: float,
+    cy: float,
+    radius: float,
+    legend_x: float,
+    legend_y: float,
+    legend_title: str | None = None,
+    compact: bool = False,
+) -> None:
+    total = sum(buckets.get(key, 0) for key in order)
+    if total <= 0:
+        return
+
+    if legend_title:
+        parts.append(
+            f'<text x="{legend_x:.1f}" y="{legend_y - 8:.1f}" font-family="Inter" font-size="{10 if compact else 11}" '
+            f'fill="#888" font-weight="600">{escape(legend_title)}</text>'
+        )
+
+    angle = -90.0
+    for key in order:
+        value = buckets.get(key, 0)
+        if value <= 0:
+            continue
+        sweep = 360.0 * value / total
+        path = _pie_slice_path(cx, cy, radius, angle, angle + sweep)
+        if path:
+            color = colors.get(key, "#cbd5e1")
+            parts.append(f'<path d="{path}" fill="{color}" stroke="#fff" stroke-width="{1.5 if compact else 2}"/>')
+        angle += sweep
+
+    row_h = 34.0 if compact else 44.0
+    for key in order:
+        value = buckets.get(key, 0)
+        if value <= 0:
+            continue
+        pct = round(100 * value / total, 1)
+        color = colors.get(key, "#cbd5e1")
+        name = escape(labels.get(key, key))
+        parts.append(f'<rect x="{legend_x:.1f}" y="{legend_y:.1f}" width="10" height="10" rx="2" fill="{color}"/>')
+        parts.append(
+            f'<text x="{legend_x + 16:.1f}" y="{legend_y + 9:.1f}" font-family="Inter" '
+            f'font-size="{11 if compact else 12}" fill="#444">{name}</text>'
+        )
+        count_label = f"{value:,}".replace(",", ".")
+        parts.append(
+            f'<text x="{legend_x + 16:.1f}" y="{legend_y + 22:.1f}" font-family="Inter" '
+            f'font-size="{10 if compact else 11}" fill="#888">{pct:g}% · {count_label}</text>'
+        )
+        legend_y += row_h
+
+
+def office_hours_dual_pie_svg(
+    buckets: dict[str, int],
+    *,
+    width: int = 700,
+    height: int = 240,
+    compact: bool = False,
+) -> str:
+    from app.utils.report_data import (
+        OFFICE_MAIN_COLORS,
+        OFFICE_MAIN_LABELS,
+        OUTSIDE_BUCKET_ORDER,
+        TIME_BUCKET_LABELS,
+        TIME_BUCKET_ORDER,
+        outside_office_buckets,
+        summarize_office_hours,
+    )
+
+    total = sum(buckets.get(key, 0) for key in TIME_BUCKET_ORDER)
+    if total <= 0:
+        return (
+            f'<text x="{width / 2:.1f}" y="{height / 2:.1f}" font-family="Inter" font-size="13" fill="#999" '
+            f'text-anchor="middle">Geen gespreksdata</text>'
+        )
+
+    main = summarize_office_hours(buckets)
+    detail = outside_office_buckets(buckets)
+    parts: list[str] = []
+
+    if compact:
+        main_cx, main_cy, main_r = width * 0.25, 82.0, 52.0
+        detail_cx, detail_cy, detail_r = width * 0.75, 82.0, 40.0
+    else:
+        main_cx, main_cy, main_r = width * 0.25, 98.0, 78.0
+        detail_cx, detail_cy, detail_r = width * 0.75, 98.0, 62.0
+
+    main_pie_order = ("buiten_kantooruren", "kantooruren")
+    main_legend_order = ("kantooruren", "buiten_kantooruren")
+
+    _render_pie_column(
+        parts,
+        main,
+        order=main_pie_order,
+        labels=OFFICE_MAIN_LABELS,
+        colors=OFFICE_MAIN_COLORS,
+        cx=main_cx,
+        cy=main_cy,
+        radius=main_r,
+        legend_title="Tijdens vs. buiten",
+        legend_order=main_legend_order,
+        compact=compact,
+    )
+
+    if detail and main.get("buiten_kantooruren", 0) > 0:
+        x1 = main_cx + main_r + 6
+        y1 = main_cy
+        x2 = detail_cx - detail_r - 8
+        parts.append(
+            f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y1:.1f}" '
+            f'stroke="#bbb" stroke-width="1.2" stroke-dasharray="4 3"/>'
+        )
+        _render_pie_column(
+            parts,
+            detail,
+            order=OUTSIDE_BUCKET_ORDER,
+            labels=TIME_BUCKET_LABELS,
+            colors=TIME_BUCKET_COLORS,
+            cx=detail_cx,
+            cy=detail_cy,
+            radius=detail_r,
+            legend_title="Buiten kantooruren",
+            compact=compact,
+        )
+    elif not compact:
+        parts.append(
+            f'<text x="{detail_cx:.1f}" y="{detail_cy:.1f}" font-family="Inter" font-size="12" fill="#bbb" '
+            f'text-anchor="middle">Geen buiten-kantooruren</text>'
+        )
+
+    return "\n        ".join(parts)
+
+
+def build_office_hours_total_html(total_buckets: dict[str, int]) -> str:
+    svg_height = 300
+    svg = office_hours_dual_pie_svg(total_buckets, width=700, height=svg_height, compact=False)
+    return (
+        '<div class="office-hours-total card">'
+        '<div class="office-hours-head">Totaal · alle kanalen</div>'
+        f'<svg viewBox="0 0 700 {svg_height}" preserveAspectRatio="xMidYMid meet" style="width:100%" '
+        'xmlns="http://www.w3.org/2000/svg">'
+        f"{svg}"
+        "</svg></div>"
+    )
+
+
+def build_office_hours_channel_slides_html(
+    by_channel: dict[str, dict[str, int]],
+    channel_counts: dict[str, int],
+    *,
+    event_name: str,
+    date_range: str,
+    page_start: int,
+    total_pages: int,
+) -> str:
+    from app.utils.report_data import CHANNEL_DISPLAY, active_channels
+    from app.utils.report_format import format_dutch_int
+
+    active = active_channels(channel_counts)
+    slides: list[str] = []
+    for index, channel in enumerate(active):
+        buckets = by_channel.get(channel, {})
+        channel_total = channel_counts.get(channel, 0)
+        if channel_total <= 0:
+            continue
+        page_num = page_start + index
+        svg_height = 280
+        svg = office_hours_dual_pie_svg(buckets, width=700, height=svg_height, compact=True)
+        label = CHANNEL_DISPLAY[channel]["label"]
+        slides.append(
+            f'<section class="slide slide-bereikbaarheid-channels">'
+            f'<div class="topbar"><div class="logo"><span class="mom-logo-text">momants</span></div>'
+            f'<div class="doc">{escape(event_name)} · Conversation Analysis</div></div>'
+            f'<div class="eyebrow">Bereikbaarheid</div>'
+            f'<h1>{escape(label)} · wanneer?</h1>'
+            f'<div class="body"><div class="card office-hours-channel-full">'
+            f'<div class="office-hours-head">{escape(label)} · {format_dutch_int(channel_total)} gesprekken</div>'
+            f'<svg viewBox="0 0 700 {svg_height}" preserveAspectRatio="xMidYMid meet" style="width:100%" '
+            f'xmlns="http://www.w3.org/2000/svg">{svg}</svg>'
+            f"</div></div>"
+            f'<div class="footer"><span>{escape(event_name)} · Conversation Analysis {escape(date_range)} · Momants</span>'
+            f"<span>{page_num} / {total_pages}</span></div>"
+            f"</section>"
+        )
+    return "".join(slides)
+
+
+def build_office_hours_page_html(
+    total_buckets: dict[str, int],
+    by_channel: dict[str, dict[str, int]],
+    channel_counts: dict[str, int],
+) -> str:
+    return build_office_hours_total_html(total_buckets)
 
 
 def office_hours_pie_chart_svg(

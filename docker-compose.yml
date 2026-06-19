@@ -65,6 +65,8 @@ services:
       - hf_cache:/app/.cache/huggingface
       - report_exports:/app/data/reports
       - weekly_report_exports:/app/data/weekly-reports
+      - ./backend/templates:/app/templates
+      - ./preview:/preview
     depends_on:
       db:
         condition: service_healthy

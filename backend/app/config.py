@@ -31,8 +31,8 @@ class Settings(BaseSettings):
 
     # Hugging Face
     sentiment_model: str = "tabularisai/multilingual-sentiment-analysis"
-    # Stage 2 (dual sentiment) models. Polarity + emotion run on English text, so a
-    # language-detection + translation step precedes them (see model_registry / sentiment_service).
+    # Stage 2 (dual sentiment) models. Polarity uses the multilingual sentiment model on
+    # original text; emotion runs on English (translated when needed). See model_registry.
     polarity_model: str = "cardiffnlp/twitter-roberta-base-sentiment-latest"
     emotion_model: str = "SamLowe/roberta-base-go_emotions"
     emotion_top_k: int = 3
@@ -65,6 +65,8 @@ class Settings(BaseSettings):
     # Clusters smaller than this are dropped from the FAQ as noise (one-off questions).
     question_min_cluster_size: int = 2
     intent_labels: str = "refund,shipping,order_status,account,pricing,product_info,complaint,technical_support,general"
+    # Global intent taxonomy: ecommerce | festival. Leave empty to use INTENT_LABELS instead.
+    intent_profile: str = "festival"
     intent_confidence_threshold: float = 0.35
     intent_complaint_min_score: float = 0.45
     intent_supported_languages: str = "nl,en,de,fr,es"
@@ -186,6 +188,14 @@ class Settings(BaseSettings):
     @property
     def intent_label_list(self) -> list[str]:
         return [label.strip() for label in self.intent_labels.split(",") if label.strip()]
+
+    @property
+    def intent_slug_list(self) -> list[str]:
+        from app.ml.intent_labels import INTENT_PROFILES
+
+        if self.intent_profile and self.intent_profile in INTENT_PROFILES:
+            return INTENT_PROFILES[self.intent_profile]
+        return self.intent_label_list
 
     @property
     def intent_supported_language_list(self) -> list[str]:

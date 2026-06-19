@@ -16,6 +16,9 @@ from app.models.conversation import Conversation, Message, SentimentAnalysis
 from app.models.insights import ConversationMetrics, UnansweredQuestion
 from app.services.insights_service import InsightsService
 from app.utils.report_charts import (
+    build_channel_volume_slides_html,
+    build_office_hours_channel_slides_html,
+    build_office_hours_page_html,
     daily_volume_chart_svg,
     hourly_bars_chart_svg,
     office_hours_pie_chart_svg,
@@ -24,16 +27,26 @@ from app.utils.report_charts import (
 from app.utils.report_data import (
     CHANNEL_LABELS,
     EMOTION_LABEL_NL,
+    active_channels,
     aggregate_sentiment_arc,
     apply_momants_stats_fallback,
+    build_bereikbaarheid_insight,
     build_channel_fragments,
+    build_channel_timing_insight,
+    build_channel_timing_intro,
+    build_channel_timing_stats_html,
+    build_channel_volume_insight,
     conversation_time_buckets,
+    conversation_time_buckets_by_channel,
     daily_conversation_counts,
+    daily_conversation_counts_by_channel,
     dominant_channel,
     fetch_momants_report_stats,
     highest_sentiment_channel,
     hourly_conversation_averages,
     hourly_conversation_counts,
+    hourly_conversation_counts_by_channel,
+    normalize_integration_channel,
     MomantsReportStats,
     peak_hour_range,
     peak_period_label,
@@ -138,6 +151,15 @@ TEMPLATE_VARS = [
     "stats_direct_revenue",
     "stats_total_value",
     "stats_pct_outside_office",
+    "avg_messages_per_conversation",
+    "page2_channels_summary",
+    "count_resolved",
+    "count_referred",
+    "count_other_handling",
+    "stats_support_hourly_rate",
+    "stats_support_calc_detail",
+    "stats_assisted_revenue_detail",
+    "stats_total_value_detail",
 ]
 
 
@@ -226,6 +248,20 @@ class ReportService:
         )
         set_num("pct_resolved", _pct(resolved_count, total_conversations), digits=0)
         set_num("pct_referred", _pct(referred_count, total_conversations), digits=0)
+        other_handling_count = max(total_conversations - resolved_count - referred_count, 0)
+        set_var("count_resolved", format_dutch_int(resolved_count), required=False)
+        set_var("count_referred", format_dutch_int(referred_count), required=False)
+        set_var("count_other_handling", format_dutch_int(other_handling_count), required=False)
+
+        if total_conversations and messages_total:
+            set_num(
+                "avg_messages_per_conversation",
+                messages_total / total_conversations,
+                digits=1,
+                required=False,
+            )
+        else:
+            variables["avg_messages_per_conversation"] = "—"
 
         start_stars = [item.start_stars for item in metrics if item.start_stars is not None]
         end_stars = [item.end_stars for item in metrics if item.end_stars is not None]
@@ -236,7 +272,12 @@ class ReportService:
         set_num("avg_end_stars", avg_end)
         set_num("avg_delta_stars", statistics.mean(deltas) if deltas else None)
 
-        channel_counts = Counter(_normalize_channel(conversation.integration_type) for conversation in conversations)
+        channel_counts = Counter(normalize_integration_channel(conversation.integration_type) for conversation in conversations)
+        set_var(
+            "page2_channels_summary",
+            _page2_channel_summary(dict(channel_counts), total_conversations),
+            required=False,
+        )
         for channel in ("whatsapp", "chat", "instagram"):
             set_var(f"channel_{channel}_count", channel_counts.get(channel, 0), required=False)
             set_num(f"channel_{channel}_pct", _pct(channel_counts.get(channel, 0), total_conversations), digits=0)
@@ -270,6 +311,7 @@ class ReportService:
         set_num("highest_sentiment_score", high_score, required=False)
 
         daily_counts = daily_conversation_counts(conversations)
+        daily_by_channel = daily_conversation_counts_by_channel(conversations)
         hour_counts = hourly_conversation_counts(conversations)
         chart_source = "local"
         daily_counts, hour_counts, chart_source = apply_momants_stats_fallback(
@@ -380,21 +422,122 @@ class ReportService:
         else:
             variables["stats_hours_saved"] = "—"
 
-        set_var("stats_support_cost_saved", format_eur(momants_stats.support_cost_saved), required=False)
+        set_var("stats_support_cost_saved", format_eur(momants_stats.support_cost_saved, compact=False), required=False)
         set_var("stats_assisted_revenue", format_eur(momants_stats.assisted_revenue), required=False)
+        set_var("stats_assisted_revenue_detail", format_eur(momants_stats.assisted_revenue, compact=False), required=False)
         set_var("stats_direct_revenue", format_eur(momants_stats.direct_revenue), required=False)
         total_value = momants_stats.total_value_creation
         set_var("stats_total_value", format_eur(total_value) if total_value is not None else None, required=False)
+        set_var(
+            "stats_total_value_detail",
+            format_eur(total_value, compact=False) if total_value is not None else None,
+            required=False,
+        )
         set_num("stats_pct_outside_office", momants_stats.pct_outside_office, digits=1, required=False)
+
+        hours_saved = momants_stats.hours_saved
+        support_cost = momants_stats.support_cost_saved
+        if hours_saved and support_cost and hours_saved > 0:
+            hourly_rate = support_cost / hours_saved
+            rate_fmt = format_eur(hourly_rate, compact=False)
+            cost_fmt = format_eur(support_cost, compact=False)
+            hours_fmt = format_dutch_int(hours_saved)
+            set_var("stats_support_hourly_rate", f"{rate_fmt}/uur", required=False)
+            set_var(
+                "stats_support_calc_detail",
+                f"{hours_fmt} uren × {rate_fmt}/uur = {cost_fmt}",
+                required=False,
+            )
+        else:
+            variables["stats_support_hourly_rate"] = "—"
+            variables["stats_support_calc_detail"] = "—"
 
         for key in TEMPLATE_VARS:
             variables.setdefault(key, "—")
 
         channel_fragments = build_channel_fragments(dict(channel_counts), channel_sentiments, total_conversations)
+        hourly_by_channel = hourly_conversation_counts_by_channel(conversations)
+        all_days = sorted(daily_counts.keys())
+        channel_volume_insight_text = build_channel_volume_insight(daily_by_channel, dict(channel_counts))
+        set_var("channel_volume_insight", channel_volume_insight_text, required=False)
+        set_var(
+            "channels_timing_intro",
+            build_channel_timing_intro(dict(channel_counts), total_conversations),
+            required=False,
+        )
+        set_var(
+            "channels_timing_insight",
+            build_channel_timing_insight(
+                dict(channel_counts),
+                hourly_by_channel,
+                peak_hour_int,
+                hourly_avg.get(peak_hour_int) if peak_hour_int is not None and hourly_avg else None,
+                total_conversations,
+            ),
+            required=False,
+        )
 
         arc = aggregate_sentiment_arc(metrics)
         time_buckets = conversation_time_buckets(conversations)
+        time_buckets_by_channel = conversation_time_buckets_by_channel(conversations)
+        set_var(
+            "bereikbaarheid_insight",
+            build_bereikbaarheid_insight(time_buckets, time_buckets_by_channel, dict(channel_counts)),
+            required=False,
+        )
+
+        active_channel_count = len(active_channels(dict(channel_counts)))
+        total_pages = 9 + (2 * active_channel_count)
+        channel_volume_start = 4
+        channels_timing_page = 3 + active_channel_count + 1
+        bereikbaarheid_page = channels_timing_page + 1
+        bereikbaarheid_channels_start = bereikbaarheid_page + 1
+        sentiment_page = bereikbaarheid_channels_start + active_channel_count
+        unanswered_1_page = sentiment_page + 1
+        unanswered_2_page = unanswered_1_page + 1
+        value_page = unanswered_2_page + 1
+
+        set_var("report_page_total", str(total_pages), required=False)
+        set_var("page_num_overview", "2", required=False)
+        set_var("page_num_total_volume", "3", required=False)
+        set_var("page_num_channels_timing", str(channels_timing_page), required=False)
+        set_var("page_num_bereikbaarheid", str(bereikbaarheid_page), required=False)
+        set_var("page_num_sentiment", str(sentiment_page), required=False)
+        set_var("page_num_unanswered_1", str(unanswered_1_page), required=False)
+        set_var("page_num_unanswered_2", str(unanswered_2_page), required=False)
+        set_var("page_num_value", str(value_page), required=False)
+
+        date_range_text = variables.get("date_range", "—")
         fragments = {
+            "channel_volume_slides": build_channel_volume_slides_html(
+                daily_by_channel,
+                all_days,
+                dict(channel_counts),
+                event_name=resolved_name,
+                date_range=date_range_text,
+                insight=channel_volume_insight_text,
+                page_start=channel_volume_start,
+                total_pages=total_pages,
+            ),
+            "office_hours_channel_slides": build_office_hours_channel_slides_html(
+                time_buckets_by_channel,
+                dict(channel_counts),
+                event_name=resolved_name,
+                date_range=date_range_text,
+                page_start=bereikbaarheid_channels_start,
+                total_pages=total_pages,
+            ),
+            "channel_timing_stats": build_channel_timing_stats_html(
+                dict(channel_counts),
+                hourly_by_channel,
+                len(all_days),
+                peak_hour_int,
+                hourly_avg.get(peak_hour_int) if peak_hour_int is not None and hourly_avg else None,
+                total_conversations,
+            ),
+            "office_hours_charts": build_office_hours_page_html(
+                time_buckets, time_buckets_by_channel, dict(channel_counts)
+            ),
             "chart_slide2_inner": daily_volume_chart_svg(daily_counts, peak_day_dt),
             "chart_slide3_inner": hourly_bars_chart_svg(hour_counts, peak_hour_int),
             "chart_slide4_inner": sentiment_arc_chart_svg(arc, avg_start, avg_end),
@@ -471,22 +614,27 @@ class ReportService:
 
     def render_html(self, agent_id: str, event_name: str | None = None) -> str:
         context = self.build_context(agent_id, event_name)
-        template = TEMPLATE_PATH.read_text(encoding="utf-8")
-        html = template
-        for key, value in context["variables"].items():
-            html = html.replace(f"{{{{{key}}}}}", _escape_html(value))
-        for key, value in context["fragments"].items():
-            html = html.replace(f"{{{{{key}}}}}", value)
-        leftover = sorted(set(re.findall(r"\{\{([a-z_0-9]+)\}\}", html)))
-        if leftover:
-            raise RuntimeError(f"Unresolved template variables: {', '.join(leftover)}")
-        return html
+        return apply_report_template(context)
 
     def render_pdf(self, agent_id: str, event_name: str | None = None) -> bytes:
         """Render the report HTML and convert it to PDF via the Gotenberg (Chromium) service."""
         from app.utils.report_pdf import html_to_pdf
 
         return html_to_pdf(self.render_html(agent_id, event_name))
+
+
+def apply_report_template(context: dict, *, template_path: Path | None = None) -> str:
+    """Fill the report HTML template with variables and HTML fragments."""
+    template = (template_path or TEMPLATE_PATH).read_text(encoding="utf-8")
+    html = template
+    for key, value in context["variables"].items():
+        html = html.replace(f"{{{{{key}}}}}", _escape_html(value))
+    for key, value in context["fragments"].items():
+        html = html.replace(f"{{{{{key}}}}}", value)
+    leftover = sorted(set(re.findall(r"\{\{([a-z_0-9]+)\}\}", html)))
+    if leftover:
+        raise RuntimeError(f"Unresolved template variables: {', '.join(leftover)}")
+    return html
 
 
 def _escape_html(value: str) -> str:
@@ -499,14 +647,7 @@ def _escape_html(value: str) -> str:
 
 
 def _normalize_channel(integration_type: str | None) -> str:
-    if not integration_type:
-        return "chat"
-    lowered = integration_type.lower()
-    if "whatsapp" in lowered or lowered in {"wa"}:
-        return "whatsapp"
-    if "instagram" in lowered or lowered in {"ig"}:
-        return "instagram"
-    return "chat"
+    return normalize_integration_channel(integration_type)
 
 
 def _pct(part: int, whole: int) -> float | None:
@@ -539,7 +680,7 @@ def _channel_sentiments(
         metric = metrics_by_conversation.get(conversation.id)
         if metric is None or metric.avg_stars is None:
             continue
-        grouped[_normalize_channel(conversation.integration_type)].append(metric.avg_stars)
+        grouped[normalize_integration_channel(conversation.integration_type)].append(metric.avg_stars)
     return {channel: round(statistics.mean(values), 1) for channel, values in grouped.items() if values}
 
 
@@ -567,6 +708,17 @@ def _conversation_referred(conversation: Conversation) -> bool:
         message.from_agent and EMAIL_RE.search(message.content or "")
         for message in conversation.messages
     )
+
+
+def _page2_channel_summary(channel_counts: dict[str, int], total: int) -> str:
+    if not total:
+        return "—"
+    parts: list[str] = []
+    for key in active_channels(channel_counts):
+        count = channel_counts.get(key, 0)
+        pct = round(100 * count / total)
+        parts.append(f"{CHANNEL_LABELS[key]} {format_dutch_int(count)} ({pct}%)")
+    return " · ".join(parts) if parts else "—"
 
 
 def _render_unanswered_examples(examples: list[str], start: int, count: int) -> str:

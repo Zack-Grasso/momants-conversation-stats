@@ -11,7 +11,7 @@ from typing import Protocol
 
 from app.integrations.momants_client import get_momants_client
 from app.ml.intent_labels import INTENT_DESCRIPTIONS
-from app.utils.report_format import all_message_timestamps, format_report_num, format_short_date
+from app.utils.report_format import all_message_timestamps, format_dutch_int, format_report_num, format_short_date
 
 logger = logging.getLogger(__name__)
 
@@ -262,6 +262,10 @@ INTENT_ICONS = {
     "complaint": "⚠️",
     "technical_support": "🔧",
     "general": "❓",
+    "tickets": "🎟️",
+    "travel": "🚌",
+    "lineup": "🎤",
+    "rules": "📋",
 }
 
 BAR_COLORS = ["#151515", "#8abe6a", "#8abe6a", "#c8e0b0", "#c8e0b0", "#c8e0b0"]
@@ -271,6 +275,17 @@ CHANNEL_LABELS = {
     "chat": "Chat",
     "instagram": "Instagram",
 }
+
+
+def normalize_integration_channel(integration_type: str | None) -> str:
+    if not integration_type:
+        return "chat"
+    lowered = integration_type.lower()
+    if "whatsapp" in lowered or lowered in {"wa"}:
+        return "whatsapp"
+    if "instagram" in lowered or lowered in {"ig"}:
+        return "instagram"
+    return "chat"
 
 
 class ConversationLike(Protocol):
@@ -310,6 +325,66 @@ def daily_conversation_counts(conversations: list[ConversationLike]) -> dict[dat
     return dict(counts)
 
 
+def daily_conversation_counts_by_channel(
+    conversations: list[ConversationLike],
+) -> dict[str, dict[datetime, int]]:
+    by_channel: dict[str, dict[datetime, int]] = defaultdict(lambda: defaultdict(int))
+    for conversation in conversations:
+        start = conversation_start(conversation)
+        if start is None:
+            continue
+        channel = normalize_integration_channel(conversation.integration_type)
+        day = start.replace(hour=0, minute=0, second=0, microsecond=0)
+        by_channel[channel][day] += 1
+    return {channel: dict(counts) for channel, counts in by_channel.items()}
+
+
+def align_daily_counts(all_days: list[datetime], daily_counts: dict[datetime, int]) -> dict[datetime, int]:
+    if not all_days:
+        return dict(daily_counts)
+    return {day: daily_counts.get(day, 0) for day in all_days}
+
+
+def build_channel_volume_insight(
+    by_channel: dict[str, dict[datetime, int]],
+    channel_counts: dict[str, int],
+) -> str:
+    active = active_channels(channel_counts)
+    peak_infos: list[tuple[str, datetime, int]] = []
+    for channel in active:
+        counts = by_channel.get(channel, {})
+        if not counts:
+            continue
+        day, count = max(counts.items(), key=lambda item: item[1])
+        if count > 0:
+            peak_infos.append((channel, day, count))
+
+    if not peak_infos:
+        return "Per kanaal zijn nog geen duidelijke piekdagen zichtbaar in deze periode."
+
+    peak_days = {day for _, day, _ in peak_infos}
+    if len(peak_days) == 1 and len(peak_infos) > 1:
+        shared_day = next(iter(peak_days))
+        top_channel, _, top_count = max(peak_infos, key=lambda item: item[2])
+        top_label = CHANNEL_DISPLAY[top_channel]["label"]
+        return (
+            f"Alle kanalen piekten op dezelfde dag ({format_short_date(shared_day)}). "
+            f"{top_label} droeg het zwaarst bij met {format_dutch_int(top_count)} gesprekken op die dag."
+        )
+
+    fragments = [
+        f"{CHANNEL_DISPLAY[channel]['label']} op {format_short_date(day)} "
+        f"({format_dutch_int(count)} gespr.)"
+        for channel, day, count in peak_infos
+    ]
+    top_channel, _, top_count = max(peak_infos, key=lambda item: item[2])
+    top_label = CHANNEL_DISPLAY[top_channel]["label"]
+    return (
+        f"De piekdagen verschillen per kanaal: {' · '.join(fragments)}. "
+        f"{top_label} had de hoogste dagpiek ({format_dutch_int(top_count)} gesprekken)."
+    )
+
+
 def hourly_conversation_counts(conversations: list[ConversationLike]) -> dict[int, int]:
     counts: Counter[int] = Counter()
     for conversation in conversations:
@@ -331,10 +406,22 @@ def hourly_conversation_averages(conversations: list[ConversationLike]) -> dict[
 TIME_BUCKET_ORDER = ("kantooruren", "na_kantooruren", "nacht", "weekend")
 TIME_BUCKET_LABELS = {
     "kantooruren": "Tijdens kantooruren",
-    "na_kantooruren": "Na kantooruren",
-    "nacht": "Nacht",
+    "na_kantooruren": "Avond (ma–vr 17–22)",
+    "nacht": "Nacht (ma–vr 22–09)",
     "weekend": "Weekend",
 }
+
+OFFICE_MAIN_LABELS = {
+    "kantooruren": "Tijdens kantooruren",
+    "buiten_kantooruren": "Buiten kantooruren",
+}
+
+OFFICE_MAIN_COLORS = {
+    "kantooruren": "#0f766e",
+    "buiten_kantooruren": "#8abe6a",
+}
+
+OUTSIDE_BUCKET_ORDER = ("na_kantooruren", "nacht", "weekend")
 
 
 def classify_conversation_time_bucket(value: datetime) -> str:
@@ -366,7 +453,222 @@ def conversation_time_buckets(conversations: list[ConversationLike]) -> dict[str
         if start is None:
             continue
         counts[classify_conversation_time_bucket(start)] += 1
-    return {key: counts.get(key, 0) for key in TIME_BUCKET_ORDER if counts.get(key, 0) > 0}
+    return {key: counts.get(key, 0) for key in TIME_BUCKET_ORDER}
+
+
+def conversation_time_buckets_by_channel(
+    conversations: list[ConversationLike],
+) -> dict[str, dict[str, int]]:
+    by_channel: dict[str, Counter[str]] = defaultdict(Counter)
+    for conversation in conversations:
+        start = conversation_start(conversation)
+        if start is None:
+            continue
+        channel = normalize_integration_channel(conversation.integration_type)
+        by_channel[channel][classify_conversation_time_bucket(start)] += 1
+    return {
+        channel: {key: counts.get(key, 0) for key in TIME_BUCKET_ORDER}
+        for channel, counts in by_channel.items()
+    }
+
+
+def summarize_office_hours(buckets: dict[str, int]) -> dict[str, int]:
+    during = buckets.get("kantooruren", 0)
+    outside = sum(buckets.get(key, 0) for key in ("na_kantooruren", "nacht", "weekend"))
+    return {"kantooruren": during, "buiten_kantooruren": outside}
+
+
+def outside_office_buckets(buckets: dict[str, int]) -> dict[str, int]:
+    return {
+        key: buckets.get(key, 0)
+        for key in ("na_kantooruren", "nacht", "weekend")
+        if buckets.get(key, 0) > 0
+    }
+
+
+def pct_outside_office(buckets: dict[str, int]) -> float | None:
+    total = sum(buckets.get(key, 0) for key in TIME_BUCKET_ORDER)
+    if total <= 0:
+        return None
+    outside = summarize_office_hours(buckets)["buiten_kantooruren"]
+    return round(100 * outside / total, 1)
+
+
+def hourly_conversation_counts_by_channel(
+    conversations: list[ConversationLike],
+) -> dict[str, dict[int, int]]:
+    by_channel: dict[str, Counter[int]] = defaultdict(Counter)
+    for conversation in conversations:
+        start = conversation_start(conversation)
+        if start is None:
+            continue
+        channel = normalize_integration_channel(conversation.integration_type)
+        by_channel[channel][start.hour] += 1
+    return {channel: dict(counts) for channel, counts in by_channel.items()}
+
+
+def build_channel_timing_intro(channel_counts: dict[str, int], total: int) -> str:
+    active = active_channels(channel_counts)
+    if not total or not active:
+        return "Deze pagina laat zien via welk kanaal bezoekers contact opnemen en op welk moment van de dag dat gebeurt."
+    labels = [CHANNEL_DISPLAY[c]["label"] for c in active]
+    if len(labels) == 1:
+        channel_text = labels[0]
+    else:
+        channel_text = ", ".join(labels[:-1]) + " en " + labels[-1]
+    return (
+        f"In deze periode kwamen {format_dutch_int(total)} gesprekken binnen via {channel_text}. "
+        "Links zie je de verdeling per kanaal; rechts het gemiddelde aantal gesprekken per uur."
+    )
+
+
+def build_channel_timing_insight(
+    channel_counts: dict[str, int],
+    hourly_by_channel: dict[str, dict[int, int]],
+    peak_hour: int | None,
+    peak_hour_avg: float | None,
+    total: int,
+) -> str:
+    active = active_channels(channel_counts)
+    if not total or peak_hour is None:
+        return "Plan agent-capaciteit op basis van het uurpatroon en zorg dat elk kanaal dezelfde antwoordkwaliteit levert."
+
+    peak_label = f"{peak_hour:02d}:00"
+    range_label = peak_hour_range(peak_hour)
+    avg_label = format_report_num(peak_hour_avg, 1) if peak_hour_avg is not None else "—"
+
+    at_peak: dict[str, int] = {
+        channel: hourly_by_channel.get(channel, {}).get(peak_hour, 0) for channel in active
+    }
+    peak_total = sum(at_peak.values())
+    if peak_total <= 0:
+        return (
+            f"De {peak_period_label(peak_hour)} rond {peak_label} is het drukst "
+            f"(gem. {avg_label} gesprekken/uur). Zorg voor voldoende capaciteit in {range_label}."
+        )
+
+    top_channel = max(at_peak, key=at_peak.get)
+    top_count = at_peak[top_channel]
+    top_pct = round(100 * top_count / peak_total)
+    top_label = CHANNEL_DISPLAY[top_channel]["label"]
+    dom_channel = dominant_channel(channel_counts) or top_label
+    dom_pct = round(100 * channel_counts.get(top_channel, 0) / total) if total else 0
+
+    return (
+        f"Rond {peak_label} ({range_label}) is het gemiddeld het drukst met {avg_label} gesprekken per uur. "
+        f"{top_label} neemt dan {top_pct}% van het piekvolume voor zijn rekening "
+        f"({format_dutch_int(top_count)} van {format_dutch_int(peak_total)} gesprekken in dat uur). "
+        f"Over de hele periode is {dom_channel} het dominante kanaal ({dom_pct}% van alle gesprekken)."
+    )
+
+
+def build_channel_timing_stats_html(
+    channel_counts: dict[str, int],
+    hourly_by_channel: dict[str, dict[int, int]],
+    daily_day_count: int,
+    peak_hour: int | None,
+    peak_hour_avg: float | None,
+    total: int,
+) -> str:
+    active = active_channels(channel_counts)
+    if not total or not active:
+        return ""
+
+    days = max(daily_day_count, 1)
+    cards: list[str] = []
+
+    dom_key = max(active, key=lambda c: channel_counts.get(c, 0))
+    dom_count = channel_counts.get(dom_key, 0)
+    dom_pct = round(100 * dom_count / total)
+    cards.append(
+        '<div class="card">'
+        '<div class="lbl"><i data-lucide="radio" class="ic"></i> Dominant kanaal</div>'
+        f'<div class="num" style="font-size:24px">{escape(CHANNEL_DISPLAY[dom_key]["label"])}</div>'
+        f'<div class="sub">{format_dutch_int(dom_count)} gesprekken · {dom_pct}% van totaal</div>'
+        "</div>"
+    )
+
+    if peak_hour is not None:
+        cards.append(
+            '<div class="card">'
+            '<div class="lbl"><i data-lucide="clock" class="ic"></i> Drukste uur</div>'
+            f'<div class="num" style="font-size:24px">{peak_hour:02d}:00</div>'
+            f'<div class="sub">gem. {format_report_num(peak_hour_avg, 1) if peak_hour_avg is not None else "—"} gesprekken / uur · {escape(peak_hour_range(peak_hour))}</div>'
+            "</div>"
+        )
+        at_peak = {c: hourly_by_channel.get(c, {}).get(peak_hour, 0) for c in active}
+        peak_total = sum(at_peak.values())
+        if peak_total > 0:
+            top_key = max(at_peak, key=at_peak.get)
+            top_pct = round(100 * at_peak[top_key] / peak_total)
+            cards.append(
+                '<div class="card dark">'
+                '<div class="lbl"><i data-lucide="zap" class="ic"></i> Piek op kanaal</div>'
+                f'<div class="num" style="font-size:24px">{escape(CHANNEL_DISPLAY[top_key]["label"])}</div>'
+                f'<div class="sub">{top_pct}% van gesprekken in piekuur ({format_dutch_int(at_peak[top_key])} gespr.)</div>'
+                "</div>"
+            )
+
+    avg_parts = [
+        f'{CHANNEL_DISPLAY[c]["label"]} {format_report_num(channel_counts.get(c, 0) / days, 1)}/dag'
+        for c in active
+    ]
+    cards.append(
+        '<div class="card green">'
+        '<div class="lbl"><i data-lucide="calendar-days" class="ic"></i> Gem. per dag</div>'
+        f'<div class="num" style="font-size:22px">{format_report_num(total / days, 1)}</div>'
+        f'<div class="sub">{" · ".join(avg_parts)}</div>'
+        "</div>"
+    )
+
+    return f'<div class="channel-timing-stats">{"".join(cards)}</div>'
+
+
+def build_bereikbaarheid_insight(
+    total_buckets: dict[str, int],
+    by_channel: dict[str, dict[str, int]],
+    channel_counts: dict[str, int],
+) -> str:
+    total = sum(total_buckets.get(key, 0) for key in TIME_BUCKET_ORDER)
+    if total <= 0:
+        return "Kantooruren zijn ma–vr 09:00–17:00 (Europe/Amsterdam). Buiten kantooruren bestaat uit avond, nacht en weekend."
+
+    outside_pct = pct_outside_office(total_buckets)
+    summary = summarize_office_hours(total_buckets)
+    outside = summary["buiten_kantooruren"]
+    detail = outside_office_buckets(total_buckets)
+
+    parts: list[str] = [
+        f"{outside_pct:g}% van de gesprekken vond plaats buiten kantooruren (ma–vr 9–17). "
+        "De grote taart toont tijdens vs. buiten kantooruren; de kleine taart zoomt in op die buiten-kantooruren."
+    ]
+
+    if outside > 0 and detail:
+        detail_bits = [
+            f"{TIME_BUCKET_LABELS[key]} {round(100 * count / outside):g}%"
+            for key, count in detail.items()
+        ]
+        parts.append(f"Van dat buiten-kantoorvolume: {' · '.join(detail_bits)}.")
+
+    active = active_channels(channel_counts)
+    if active and outside > 0:
+        outside_by_channel = {
+            channel: summarize_office_hours(buckets)["buiten_kantooruren"]
+            for channel, buckets in by_channel.items()
+            if channel in active
+        }
+        if outside_by_channel:
+            top_channel = max(outside_by_channel, key=outside_by_channel.get)
+            top_outside = outside_by_channel[top_channel]
+            channel_total = channel_counts.get(top_channel, 0)
+            if channel_total > 0:
+                ch_outside_pct = round(100 * top_outside / channel_total)
+                parts.append(
+                    f"{CHANNEL_DISPLAY[top_channel]['label']} heeft het meeste buiten-kantoorvolume "
+                    f"({format_dutch_int(top_outside)} gespr., {ch_outside_pct}% van dat kanaal)."
+                )
+
+    return " ".join(parts)
 
 
 def aggregate_sentiment_arc(metrics: list[MetricsLike], max_index: int = 10) -> list[float]:
