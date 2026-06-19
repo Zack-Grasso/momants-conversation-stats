@@ -6,11 +6,16 @@ from app.utils.report_charts import (
     build_channel_volume_slides_html,
     build_office_hours_channel_slides_html,
     build_office_hours_page_html,
+    build_office_hours_shared_legend_html,
+    build_office_hours_total_html,
     daily_volume_chart_svg,
     emotion_timeline_chart_svg,
     hourly_bars_chart_svg,
+    multi_channel_daily_volume_chart_svg,
+    office_hours_channels_chart_svg,
     office_hours_dual_pie_svg,
     office_hours_pie_chart_svg,
+    office_hours_timing_chart_svg,
     sentiment_arc_chart_svg,
 )
 from app.utils.report_data import EmotionTimeline, EMOTION_LABEL_NL
@@ -25,12 +30,14 @@ def test_template_contains_dynamic_chart_placeholders():
     assert "{{chart_slide3_inner}}" in template
     assert "{{channel_volume_slides}}" in template
     assert "{{channels_timing_intro}}" in template
-    assert "{{channel_timing_stats}}" in template
+    assert "{{channel_timing_channel_stats}}" in template
+    assert "{{channel_timing_hourly_stats}}" in template
     assert "{{office_hours_charts}}" in template
     assert "{{office_hours_channel_slides}}" in template
     assert "{{bereikbaarheid_insight}}" in template
     assert "{{channel_sentiment_cols}}" not in template
-    assert "{{chart_slide4_inner}}" in template
+    assert "{{sentiment_headline}}" in template
+    assert "{{sentiment_page_content}}" in template
     assert "WhatsApp is het dominante kanaal" not in template
     # Channels are rendered conditionally via fragments (Instagram hidden when empty).
     assert "{{channel_pills}}" in template
@@ -154,7 +161,7 @@ def test_office_hours_dual_pie_svg_renders_main_and_zoom():
     assert "Zoom:" not in svg
 
 
-def test_build_office_hours_page_html_total_only():
+def test_build_office_hours_page_html_includes_shared_legend():
     html = build_office_hours_page_html(
         {"kantooruren": 10, "na_kantooruren": 5, "nacht": 3, "weekend": 2},
         {
@@ -164,12 +171,13 @@ def test_build_office_hours_page_html_total_only():
         {"whatsapp": 15, "chat": 5},
     )
 
+    assert "office-hours-shared-legend" in html
     assert "Totaal · alle kanalen" in html
     assert "WhatsApp" not in html
     assert "Chat" not in html
 
 
-def test_build_channel_volume_slides_html_one_page_per_channel():
+def test_build_channel_volume_slides_html_renders_combined_chart():
     day = datetime(2026, 5, 24, tzinfo=timezone.utc)
     day_key = day.replace(hour=0, minute=0, second=0, microsecond=0)
     html = build_channel_volume_slides_html(
@@ -180,17 +188,21 @@ def test_build_channel_volume_slides_html_one_page_per_channel():
         date_range="8 mei – 16 jun",
         insight="Test insight",
         page_start=4,
-        total_pages=13,
+        total_pages=12,
     )
 
-    assert html.count("slide-channel-volume") == 2
-    assert "4 / 13" in html
-    assert "5 / 13" in html
+    assert html.count("slide-channel-volume") == 1
+    assert "4 / 12" in html
+    assert "Volume per kanaal" in html
+    assert "channel-volume-combined" in html
+    assert "channel-volume-legend" in html
     assert "WhatsApp" in html
     assert "Chat" in html
+    assert "Test insight" in html
+    assert 'class="mom-logo"' in html
 
 
-def test_build_office_hours_channel_slides_html_one_page_per_channel():
+def test_build_office_hours_channel_slides_html_combined_page():
     html = build_office_hours_channel_slides_html(
         {
             "whatsapp": {"kantooruren": 8, "na_kantooruren": 4, "nacht": 2, "weekend": 1},
@@ -199,18 +211,65 @@ def test_build_office_hours_channel_slides_html_one_page_per_channel():
         {"whatsapp": 15, "chat": 5},
         event_name="Test Event",
         date_range="8 mei – 16 jun",
-        page_start=8,
-        total_pages=13,
+        page_start=7,
+        total_pages=11,
     )
 
-    assert html.count("slide-bereikbaarheid-channels") == 2
-    assert "8 / 13" in html
-    assert "9 / 13" in html
+    assert html.count("slide-bereikbaarheid-channels") == 1
+    assert "7 / 11" in html
+    assert "Per kanaal · wanneer?" in html
+    assert "office-hours-shared-legend" in html
+    assert "office-hours-compare" in html
     assert "WhatsApp" in html
     assert "Chat" in html
 
 
-def test_office_hours_pie_chart_svg_renders_segments():
+def test_build_office_hours_shared_legend_html():
+    html = build_office_hours_shared_legend_html(chart_kind="bar")
+    assert "Tijdens kantooruren" in html
+    assert "Weekend" in html
+    assert "Elke balk" in html
+
+    pie_html = build_office_hours_shared_legend_html(chart_kind="pie")
+    assert "elke taart" in pie_html
+
+
+def test_office_hours_timing_chart_svg_renders_stacked_bars():
+    svg = office_hours_timing_chart_svg(
+        {"kantooruren": 40, "na_kantooruren": 30, "nacht": 20, "weekend": 10},
+        height=260,
+    )
+
+    assert "Volledige verdeling" in svg
+    assert "Tijdens vs. buiten kantoor uren" in svg
+    assert "29.9%" in svg or "30%" in svg
+
+
+def test_office_hours_channels_chart_svg_renders_rows():
+    svg = office_hours_channels_chart_svg(
+        {
+            "whatsapp": {"kantooruren": 8, "na_kantooruren": 4, "nacht": 2, "weekend": 1},
+            "chat": {"kantooruren": 2, "na_kantooruren": 1, "nacht": 1, "weekend": 1},
+        },
+        {"whatsapp": 15, "chat": 5},
+        height=280,
+    )
+
+    assert "WhatsApp" in svg
+    assert "Chat" in svg
+
+
+def test_build_office_hours_total_html_uses_pie_chart():
+    html = build_office_hours_total_html(
+        {"kantooruren": 10, "na_kantooruren": 5, "nacht": 3, "weekend": 2},
+    )
+
+    assert "office-hours-total-pie" in html
+    assert "Tijdens vs. buiten kantoor uren" in html
+    assert "elke taart" in html
+
+
+def test_office_hours_pie_chart_svg_renders_legend():
     svg = office_hours_pie_chart_svg(
         {"kantooruren": 40, "na_kantooruren": 30, "nacht": 20, "weekend": 10}
     )
@@ -220,3 +279,16 @@ def test_office_hours_pie_chart_svg_renders_segments():
     assert "Avond (ma–vr 17–22)" in svg
     assert "Nacht (ma–vr 22–09)" in svg
     assert "Weekend" in svg
+
+
+def test_multi_channel_volume_chart_includes_peak_labels():
+    day1 = datetime(2026, 5, 20, tzinfo=timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    day2 = datetime(2026, 5, 24, tzinfo=timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    svg = multi_channel_daily_volume_chart_svg(
+        [("whatsapp", {day1: 100, day2: 500}), ("chat", {day1: 50, day2: 80})],
+        days=[day1, day2],
+        width=1280,
+        height=320,
+    )
+
+    assert "Piek:" in svg

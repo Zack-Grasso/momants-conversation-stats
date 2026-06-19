@@ -78,3 +78,18 @@ def test_sentiment_summary_resolves_dominant_mood_label():
 
     assert polarity == "positive"
     assert mood == "vreugde"
+
+
+def test_page2_response_times_robust_first_median_and_mean_conversation_median():
+    import statistics
+
+    metrics = [
+        SimpleNamespace(first_response_seconds=5.0, median_response_seconds=10.0),
+        SimpleNamespace(first_response_seconds=500.0, median_response_seconds=12.0),
+        SimpleNamespace(first_response_seconds=4.0, median_response_seconds=8.0),
+    ]
+    first = [m.first_response_seconds for m in metrics]
+    medians = [m.median_response_seconds for m in metrics]
+    assert statistics.median(first) == 5.0
+    assert statistics.mean(medians) == 10.0
+    assert statistics.median(first) < statistics.mean(medians)

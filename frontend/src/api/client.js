@@ -90,6 +90,10 @@ export const api = {
     const q = agentId ? `?agent_id=${encodeURIComponent(agentId)}` : "";
     return request(`/api/sentiment/latest${q}`);
   },
+  getLatestIntentJob: (agentId = null) => {
+    const q = agentId ? `?agent_id=${encodeURIComponent(agentId)}` : "";
+    return request(`/api/intent/latest${q}`);
+  },
   startPipeline: (agentId) =>
     request("/api/pipeline/run", {
       method: "POST",
@@ -99,6 +103,11 @@ export const api = {
     request("/api/pipeline/reanalyze", {
       method: "POST",
       body: JSON.stringify({ agent_id: agentId }),
+    }),
+  labelReferredIntents: (agentId, reanalyze = false) =>
+    request("/api/pipeline/referred-intent", {
+      method: "POST",
+      body: JSON.stringify({ agent_id: agentId, reanalyze }),
     }),
   listAgents: () => request("/api/agents"),
   deleteInsightsForAgent: (agentId) =>

@@ -16,11 +16,27 @@ def escape_html(value: str) -> str:
     )
 
 
+TRANSLATION_ATTRIBUTION_RE = re.compile(r" \(vertaald van [A-Z]{2} - NL\)$")
+
+
+def format_translation_attribution(source_lang: str) -> str:
+    code = (source_lang or "??").strip().upper() or "??"
+    return f" (vertaald van {code} - NL)"
+
+
 def truncate(value: str, max_len: int) -> str:
+    suffix = ""
+    match = TRANSLATION_ATTRIBUTION_RE.search(value)
+    if match:
+        suffix = match.group(0)
+        value = value[: match.start()]
     cleaned = " ".join(value.split())
-    if len(cleaned) <= max_len:
-        return cleaned
-    return cleaned[: max_len - 1].rstrip() + "…"
+    if len(cleaned) + len(suffix) <= max_len:
+        return cleaned + suffix
+    budget = max_len - len(suffix) - 1
+    if budget < 1:
+        return cleaned[: max_len - 1].rstrip() + "…"
+    return cleaned[:budget].rstrip() + "…" + suffix
 
 
 def render_top_questions_grid(clusters: list[tuple[str, int]], limit: int = 18) -> str:

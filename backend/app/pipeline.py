@@ -32,6 +32,7 @@ from app.services.ingestion_service import IngestionService
 from app.services.insights_service import InsightsService
 from app.services.report_service import ReportService
 from app.services.job_concurrency import fail_orphaned_jobs
+from app.services.referred_intent_service import ReferredIntentService
 from app.services.sentiment_service import SentimentService
 from app.utils.report_storage import save_report_pdf
 
@@ -114,6 +115,27 @@ def run_sentiment(
         service.run_job(job.id)
 
     _run_with_retries(f"sentiment job {job.id}", _execute)
+    return job.id
+
+
+def run_referred_intent(
+    db: Session,
+    agent_id: str,
+    *,
+    conversation_ids: list[int] | None = None,
+    reanalyze: bool = False,
+) -> int:
+    service = ReferredIntentService(db)
+    job = service.create_job(
+        agent_id,
+        conversation_ids=conversation_ids,
+        reanalyze=reanalyze,
+    )
+
+    def _execute() -> None:
+        service.run_job(job.id)
+
+    _run_with_retries(f"referred intent job {job.id}", _execute)
     return job.id
 
 
@@ -336,6 +358,8 @@ def run_pipeline(
             set_pipeline_run_state(agent_id, stage="insights")
             notify_milestone(initiated_by, agent_id, MILESTONE_INSIGHTS_STARTED, agent_name=agent_name)
             notify_milestone(initiated_by, agent_id, MILESTONE_INSIGHTS_DONE, agent_name=agent_name)
+            set_pipeline_run_state(agent_id, stage="intents")
+            run_referred_intent(db, agent_id)
             set_pipeline_run_state(agent_id, stage="warming")
             warm_agent_cache(db, agent_id)
             _set_scheduler_heartbeat(agent_id)
@@ -422,6 +446,25 @@ def run_pipeline(
             InsightsService(db).finalize_questions(agent_id)
 
         notify_milestone(initiated_by, agent_id, MILESTONE_INSIGHTS_DONE, agent_name=agent_name)
+
+        set_pipeline_run_state(agent_id, stage="intents")
+        if all_processed_entries:
+            intent_conversation_ids = _conversation_ids_for_entries(db, agent_id, all_processed_entries)
+            if intent_conversation_ids:
+                logger.info(
+                    "Running referred intent labeling for agent %s (%s new conversations)",
+                    agent_id,
+                    len(intent_conversation_ids),
+                )
+                run_referred_intent(
+                    db,
+                    agent_id,
+                    conversation_ids=intent_conversation_ids,
+                    reanalyze=reanalyze,
+                )
+        else:
+            run_referred_intent(db, agent_id, reanalyze=reanalyze)
+
         sync_state.mark_sync_completed(
             agent_id,
             sync_started_at,
@@ -502,6 +545,10 @@ def run_reanalyze(agent_id: str, initiated_by: str | None = None) -> None:
             InsightsService(db).finalize_questions(agent_id)
         notify_milestone(initiated_by, agent_id, MILESTONE_INSIGHTS_DONE, agent_name=agent_name)
 
+        set_pipeline_run_state(agent_id, stage="intents")
+        if conversation_ids:
+            run_referred_intent(db, agent_id, conversation_ids=conversation_ids, reanalyze=True)
+
         set_pipeline_run_state(agent_id, stage="warming")
         warm_agent_cache(db, agent_id)
         _set_scheduler_heartbeat(agent_id)
@@ -579,6 +626,18 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Email of the user who requested this run (for Slack milestone DMs)",
     )
 
+    referred_intent_parser = sub.add_parser(
+        "referred-intent",
+        help="Label intents for doorverwezen conversations only",
+    )
+    referred_intent_parser.add_argument("--agent-id", required=True)
+    referred_intent_parser.add_argument("--reanalyze", action="store_true")
+    referred_intent_parser.add_argument(
+        "--initiated-by",
+        default=None,
+        help="Email of the user who requested this run (ignored; accepted for launcher compatibility)",
+    )
+
     warm_parser = sub.add_parser("warm", help="Warm cache only")
     warm_parser.add_argument("--agent-id", required=True)
 
@@ -642,6 +701,14 @@ def main(argv: list[str] | None = None) -> int:
                 release_agent_job_lock(args.agent_id, PIPELINE_LOCK_KIND)
         elif args.command == "reanalyze":
             run_reanalyze(args.agent_id, initiated_by=args.initiated_by)
+        elif args.command == "referred-intent":
+            run_referred_intent(
+                db,
+                args.agent_id,
+                reanalyze=args.reanalyze,
+            )
+            warm_agent_cache(db, args.agent_id)
+            _set_scheduler_heartbeat(args.agent_id)
         elif args.command == "warm":
             warm_agent_cache(db, args.agent_id)
             _set_scheduler_heartbeat(args.agent_id)

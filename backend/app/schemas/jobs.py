@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict
 class RunningJobRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    job_type: Literal["ingest", "insights", "sentiment"]
+    job_type: Literal["ingest", "insights", "sentiment", "intent"]
     id: int
     agent_id: str
     status: str
@@ -38,7 +38,30 @@ class RunningJobsResponse(BaseModel):
     sentiment_running: int
     sentiment_limit: int
     sentiment_slots_left: int
+    intent_running: int
+    intent_limit: int
+    intent_slots_left: int
     agent_running: int
+
+
+class ReferredIntentJobRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    agent_id: str
+    status: str
+    processed: int
+    limit: int | None = None
+    failed: int = 0
+    messages_analyzed: int = 0
+    reanalyze: bool = False
+    phase: str | None = None
+    phase_detail: str | None = None
+    phase_progress: int = 0
+    phase_total: int = 0
+    error: str | None = None
+    created_at: datetime
+    completed_at: datetime | None = None
 
 
 class SentimentJobRead(BaseModel):

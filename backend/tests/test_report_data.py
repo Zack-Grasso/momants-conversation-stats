@@ -11,6 +11,8 @@ from app.utils.report_data import (
     build_channel_volume_insight,
     build_emotion_timeline_insight,
     build_bereikbaarheid_insight,
+    build_channel_timing_channel_panel_stats_html,
+    build_channel_timing_hourly_panel_stats_html,
     build_channel_timing_insight,
     build_channel_timing_intro,
     build_channel_timing_stats_html,
@@ -27,6 +29,10 @@ from app.utils.report_data import (
     parse_momants_report_stats,
     peak_hour_range,
     render_intent_breakdown_html,
+    build_referred_intent_summary,
+    build_support_hours_explanation_html,
+    compute_support_savings_breakdown,
+    format_support_savings_calc_detail,
 )
 from app.utils.report_format import format_report_num
 
@@ -196,6 +202,47 @@ def test_render_intent_breakdown_html_includes_label_and_pct():
     assert "%" in html
 
 
+def test_build_referred_intent_summary_lists_top_topics():
+    summary = build_referred_intent_summary(
+        100,
+        {"tickets": 40, "refund": 30, "travel": 20},
+        labeled_count=90,
+    )
+
+    assert "Meest gedeeld e-mailadres vanwege" in summary
+    assert "90 van 100" in summary
+
+
+def test_build_referred_intent_summary_empty_when_no_labels():
+    assert build_referred_intent_summary(10, {}) == (
+        "Intent-labels voor doorverwezen gesprekken ontbreken — voer intent-labeling uit."
+    )
+
+
+def test_build_support_hours_explanation_html_includes_methodology():
+    html = build_support_hours_explanation_html(
+        resolved_count=9438,
+        hours_saved=828.75,
+        support_cost_saved=20718.75,
+    )
+
+    assert "9.438" in html
+    assert "828,75" in html
+    assert "5,3" in html
+    assert "support-stats-grid" in html
+    assert "828,75 uren ×" in html
+
+
+def test_compute_support_savings_breakdown_matches_momants_numbers():
+    breakdown = compute_support_savings_breakdown(9438, 828.75, 20718.75)
+    assert breakdown is not None
+    assert breakdown.handled_count == 9438
+    assert breakdown.hourly_rate == 25.0
+    assert format_support_savings_calc_detail(breakdown) == (
+        "828,75 uren × €25/uur = €20.718,75"
+    )
+
+
 def test_build_action_bodies_uses_cluster_and_peak_data():
     bodies = build_action_bodies(
         ActionBodyContext(
@@ -340,6 +387,32 @@ def test_summarize_office_hours_groups_outside_buckets():
         "weekend": 10,
     }
     assert pct_outside_office(buckets) == 60.0
+
+
+def test_build_channel_timing_panel_stats_embed_in_panels():
+    channel_stats = build_channel_timing_channel_panel_stats_html(
+        {"whatsapp": 7270, "chat": 2674},
+        daily_day_count=40,
+        total=9944,
+    )
+    hourly_stats = build_channel_timing_hourly_panel_stats_html(
+        {"whatsapp": 7270, "chat": 2674},
+        {"whatsapp": {13: 715}, "chat": {13: 189}},
+        13,
+        22.6,
+        9944,
+    )
+
+    assert "channels-timing-panel-stats" in channel_stats
+    assert "Dominant kanaal" in channel_stats
+    assert "Gem. per dag" in channel_stats
+    assert "7.270 van 9.944" in channel_stats
+    assert "Gemiddeld over 40 dagen" in channel_stats
+
+    assert "Piek uur" in hourly_stats
+    assert "Piek kanaal" in hourly_stats
+    assert "13:00" in hourly_stats
+    assert "715 van 904" in hourly_stats
 
 
 def test_build_channel_timing_insight_mentions_peak_channel_share():

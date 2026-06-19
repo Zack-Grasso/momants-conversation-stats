@@ -131,6 +131,7 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 }
 
 .progress-fill.insights { background: #0891b2; }
+.progress-fill.intent { background: #d97706; }
 
 .job-detail { margin: 0 0 0.75rem; color: #475569; font-size: 0.95rem; }
 .phase-name { font-weight: 600; color: #0f766e; }

@@ -14,11 +14,12 @@ from app.config import get_settings
 from app.locks import job_admission_lock
 from app.models.ingestion_job import IngestionJob
 from app.models.insights import InsightsJob
+from app.models.referred_intent_job import ReferredIntentJob
 from app.models.sentiment_job import SentimentJob
 
 logger = logging.getLogger(__name__)
 
-JobKind = Literal["ingest", "insights", "sentiment"]
+JobKind = Literal["ingest", "insights", "sentiment", "intent"]
 
 T = TypeVar("T")
 
@@ -48,11 +49,19 @@ def count_running_sentiment_jobs(db: Session, agent_id: str | None = None) -> in
     return db.scalar(stmt) or 0
 
 
+def count_running_intent_jobs(db: Session, agent_id: str | None = None) -> int:
+    stmt = select(func.count()).select_from(ReferredIntentJob).where(ReferredIntentJob.status == "running")
+    if agent_id:
+        stmt = stmt.where(ReferredIntentJob.agent_id == agent_id)
+    return db.scalar(stmt) or 0
+
+
 def count_running_jobs(db: Session, agent_id: str | None = None) -> int:
     return (
         count_running_ingest_jobs(db, agent_id)
         + count_running_insights_jobs(db, agent_id)
         + count_running_sentiment_jobs(db, agent_id)
+        + count_running_intent_jobs(db, agent_id)
     )
 
 
@@ -61,7 +70,8 @@ def can_start_job(db: Session, job_kind: JobKind, agent_id: str | None = None) -
     ingest_running = count_running_ingest_jobs(db)
     insights_running = count_running_insights_jobs(db)
     sentiment_running = count_running_sentiment_jobs(db)
-    total_running = ingest_running + insights_running + sentiment_running
+    intent_running = count_running_intent_jobs(db)
+    total_running = ingest_running + insights_running + sentiment_running + intent_running
 
     if total_running >= settings.max_concurrent_jobs:
         return False
@@ -76,6 +86,12 @@ def can_start_job(db: Session, job_kind: JobKind, agent_id: str | None = None) -
         if sentiment_running >= settings.max_concurrent_sentiment:
             return False
         if agent_id and count_running_sentiment_jobs(db, agent_id) >= settings.max_concurrent_sentiment_per_agent:
+            return False
+        return True
+    if job_kind == "intent":
+        if intent_running >= settings.max_concurrent_intent:
+            return False
+        if agent_id and count_running_intent_jobs(db, agent_id) >= settings.max_concurrent_intent_per_agent:
             return False
         return True
     if insights_running >= settings.max_concurrent_insights:
@@ -166,7 +182,7 @@ def fail_orphaned_jobs(db: Session, agent_id: str, *, error: str = "Orphaned by 
     """
     now = datetime.now(timezone.utc)
     cleared = 0
-    for model in (IngestionJob, InsightsJob, SentimentJob):
+    for model in (IngestionJob, InsightsJob, SentimentJob, ReferredIntentJob):
         rows = db.scalars(
             select(model).where(model.agent_id == agent_id, model.status == "running")
         ).all()
@@ -185,8 +201,11 @@ def concurrency_snapshot(db: Session, agent_id: str | None = None) -> dict[str, 
     ingest_running = count_running_ingest_jobs(db, agent_id)
     insights_running = count_running_insights_jobs(db, agent_id)
     sentiment_running = count_running_sentiment_jobs(db, agent_id)
+    intent_running = count_running_intent_jobs(db, agent_id)
     total_running = (
-        ingest_running + insights_running + sentiment_running if agent_id else count_running_jobs(db)
+        ingest_running + insights_running + sentiment_running + intent_running
+        if agent_id
+        else count_running_jobs(db)
     )
     return {
         "global_running": count_running_jobs(db),
@@ -207,6 +226,12 @@ def concurrency_snapshot(db: Session, agent_id: str | None = None) -> dict[str, 
         "sentiment_limit": settings.max_concurrent_sentiment,
         "sentiment_slots_left": min(
             settings.max_concurrent_sentiment - count_running_sentiment_jobs(db),
+            settings.max_concurrent_jobs - count_running_jobs(db),
+        ),
+        "intent_running": count_running_intent_jobs(db),
+        "intent_limit": settings.max_concurrent_intent,
+        "intent_slots_left": min(
+            settings.max_concurrent_intent - count_running_intent_jobs(db),
             settings.max_concurrent_jobs - count_running_jobs(db),
         ),
         "agent_running": total_running,

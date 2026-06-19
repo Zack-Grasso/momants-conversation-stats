@@ -11,6 +11,7 @@ const {
   runningIngestJobs,
   runningSentimentJobs,
   runningInsightsJobs,
+  runningIntentJobs,
   jobLimits,
   adminBusy,
   logs,
@@ -20,6 +21,7 @@ const {
   hasLiveProgress,
   pipelineStarting,
   reanalyzing,
+  labelingReferredIntents,
   error,
   success,
   lastUpdated,
@@ -32,6 +34,8 @@ const {
   ingestProgress,
   sentimentProgress,
   insightsProgress,
+  intentProgress,
+  intentEta,
   formatDuration,
   formatLogTime,
   phaseLabel,
@@ -39,6 +43,7 @@ const {
   loadStatus,
   startPipeline,
   reanalyze,
+  labelReferredIntents,
   purgeSystem,
 } = usePipelineRunner(agentId);
 
@@ -57,6 +62,7 @@ const stageLabels = {
   ingest: "Ingesting conversations",
   sentiment: "Analyzing sentiment",
   insights: "Running insights",
+  intents: "Labeling doorverwezen intents",
   warming: "Warming cache",
   ready: "Ready",
   idle: "Idle",
@@ -92,9 +98,18 @@ onMounted(() => {
         >
           {{ reanalyzing ? "Starting…" : "Reanalyze (sentiment + insights)" }}
         </button>
+        <button
+          type="button"
+          class="secondary"
+          :disabled="labelingReferredIntents || pipelineRunning || !hasAgentId"
+          @click="labelReferredIntents(false)"
+        >
+          {{ labelingReferredIntents ? "Starting…" : "Label doorverwezen intents" }}
+        </button>
       </div>
       <p class="hint">
         Reanalyze skips ingest and re-runs sentiment + insights over conversations already stored for this agent.
+        Doorverwezen intent labeling classifies only referred conversations (where the agent shared an e-mail).
       </p>
       <p v-if="agentsError" class="hint warn">Could not load agents: {{ agentsError }}</p>
       <p v-else-if="!hasAgentId" class="hint warn">Select an agent to begin.</p>
@@ -141,6 +156,7 @@ onMounted(() => {
         · Ingest {{ jobLimits.ingestRunning }} / {{ jobLimits.ingestLimit }}
         · Sentiment {{ jobLimits.sentimentRunning }} / {{ jobLimits.sentimentLimit }}
         · Insights {{ jobLimits.insightsRunning }} / {{ jobLimits.insightsLimit }}
+        · Intents {{ jobLimits.intentRunning }} / {{ jobLimits.intentLimit }}
         <span v-if="hasAgentId"> · This agent: {{ jobLimits.agentRunning }} running</span>
       </p>
 
@@ -271,6 +287,42 @@ onMounted(() => {
           </div>
         </div>
         <p v-if="insightsJob.error" class="error">{{ insightsJob.error }}</p>
+      </div>
+
+      <div
+        v-for="intentJob in runningIntentJobs"
+        :key="`intent-${intentJob.id}`"
+        class="job-card"
+        :class="jobStatusClass(intentJob.status)"
+      >
+        <div class="job-card-header">
+          <strong>Doorverwezen intents #{{ intentJob.id }}</strong>
+          <span class="status-pill" :class="jobStatusClass(intentJob.status)">{{ intentJob.status }}</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill intent" :style="{ width: `${intentProgress(intentJob)}%` }" />
+        </div>
+        <p class="job-detail">
+          <span class="phase-name">{{ phaseLabel(intentJob.phase) }}</span>
+          <span v-if="intentJob.phase_detail"> — {{ intentJob.phase_detail }}</span>
+        </p>
+        <div class="job-metrics">
+          <div class="metric">
+            <span class="metric-label">Progress</span>
+            <span class="metric-value">{{ intentJob.processed }} / {{ intentJob.limit ?? "?" }}</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Elapsed</span>
+            <span class="metric-value">{{ formatDuration(jobElapsed(intentJob)) }}</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">ETA</span>
+            <span class="metric-value">
+              {{ intentEta(intentJob) !== null ? `~${formatDuration(intentEta(intentJob))}` : "Estimating…" }}
+            </span>
+          </div>
+        </div>
+        <p v-if="intentJob.error" class="error">{{ intentJob.error }}</p>
       </div>
 
       <div v-if="pipelineStage === 'warming'" class="job-card running">

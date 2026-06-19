@@ -80,6 +80,8 @@ class Settings(BaseSettings):
     gotenberg_timeout_seconds: float = 120.0
     # Directory where pipeline-generated rapport PDFs are stored for preview/download.
     report_exports_dir: str = "/app/data/reports"
+    # Max borderline unanswered questions sent to HF during report generation (0 = heuristics only).
+    report_nonsense_hf_max_questions: int = 0
 
     # Weekly report subsystem (isolated from main DATABASE_URL)
     weekly_database_url: str = (
@@ -144,11 +146,13 @@ class Settings(BaseSettings):
     max_concurrent_ingest: int = 3
     max_concurrent_insights: int = 2
     max_concurrent_sentiment: int = 2
+    max_concurrent_intent: int = 2
     # Per-agent caps so a single agent can't take every global slot (fairness for parallel
     # agent runs). The effective limit is min(global, per-agent).
     max_concurrent_ingest_per_agent: int = 8
     max_concurrent_insights_per_agent: int = 4
     max_concurrent_sentiment_per_agent: int = 4
+    max_concurrent_intent_per_agent: int = 2
     # Texts handed to a single zero-shot call; they are now classified concurrently, so a
     # larger batch keeps the HF inference pool well-fed.
     intent_batch_size: int = 32

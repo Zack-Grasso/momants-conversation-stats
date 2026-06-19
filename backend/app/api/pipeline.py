@@ -10,6 +10,7 @@ from app.services.pipeline_launcher import (
     PipelineBusyError,
     PipelineConfigError,
     launch_reanalyze,
+    launch_referred_intent,
     launch_run,
 )
 
@@ -71,4 +72,32 @@ def reanalyze_pipeline(
     return PipelineRunResponse(
         status="started",
         message="Reanalyze started in background (sentiment + insights). You'll get Slack updates as each stage completes.",
+    )
+
+
+class ReferredIntentRequest(BaseModel):
+    agent_id: str = Field(min_length=1, max_length=36)
+    reanalyze: bool = False
+
+
+@router.post("/referred-intent", response_model=PipelineRunResponse, status_code=status.HTTP_202_ACCEPTED)
+def start_referred_intent_labeling(
+    payload: ReferredIntentRequest,
+    user: AuthUser = Depends(get_current_user),
+) -> PipelineRunResponse:
+    """Label intents for doorverwezen conversations only."""
+    try:
+        launch_referred_intent(payload.agent_id, user.email, reanalyze=payload.reanalyze)
+    except PipelineBusyError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        logger.exception("Failed to spawn referred intent labeling for agent %s", payload.agent_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(exc),
+        ) from exc
+
+    return PipelineRunResponse(
+        status="started",
+        message="Referred intent labeling started in background (doorverwezen gesprekken only).",
     )

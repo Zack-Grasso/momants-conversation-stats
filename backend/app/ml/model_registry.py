@@ -280,12 +280,18 @@ class ModelRegistry:
         return self._translate_client
 
     def translate_to_english(self, text: str, source_lang: str) -> tuple[str, bool]:
-        """Translate ``text`` to English. Returns (text, translated?).
-
-        Skips the API entirely for English text or when no key is configured, and falls
-        back to the original text on any error so sentiment analysis never hard-fails.
-        """
+        """Translate ``text`` to English. Returns (text, translated?)."""
         if not text or not text.strip() or source_lang == "en":
+            return text, False
+        return self.translate_text(text, source_lang, "en")
+
+    def translate_to_dutch(self, text: str, source_lang: str) -> tuple[str, bool]:
+        """Translate ``text`` to Dutch. Returns (text, translated?)."""
+        return self.translate_text(text, source_lang, "nl")
+
+    def translate_text(self, text: str, source_lang: str, target_lang: str) -> tuple[str, bool]:
+        """Translate ``text`` to ``target_lang``. Returns (text, translated?)."""
+        if not text or not text.strip() or source_lang == target_lang:
             return text, False
         client = self.get_translate_client()
         if client is None:
@@ -295,8 +301,8 @@ class ModelRegistry:
         try:
             from app.cache import cache_get
 
-            digest = hashlib.sha256(f"{source_lang}:{text}".encode("utf-8")).hexdigest()
-            cache_key = f"translate:en:{digest}"
+            digest = hashlib.sha256(f"{source_lang}:{target_lang}:{text}".encode("utf-8")).hexdigest()
+            cache_key = f"translate:{target_lang}:{digest}"
             cached = cache_get(cache_key)
             if isinstance(cached, str):
                 return cached, True
@@ -308,13 +314,17 @@ class ModelRegistry:
             response = client.post(
                 "https://translation.googleapis.com/language/translate/v2",
                 params={"key": self._settings.google_translate_api_key.strip()},
-                json={"q": text, "source": source_lang, "target": "en", "format": "text"},
+                json={"q": text, "source": source_lang, "target": target_lang, "format": "text"},
             )
             response.raise_for_status()
             translations = response.json()["data"]["translations"]
             translated = str(translations[0].get("translatedText") or text)
         except Exception:
-            logger.exception("Google translation failed for lang=%s; using original text", source_lang)
+            logger.exception(
+                "Google translation failed for lang=%s -> %s; using original text",
+                source_lang,
+                target_lang,
+            )
             return text, False
 
         if cache_key is not None:

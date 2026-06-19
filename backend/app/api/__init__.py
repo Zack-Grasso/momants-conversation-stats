@@ -7,6 +7,7 @@ from app.api import (
     health,
     ingest,
     insights,
+    intent,
     jobs,
     pipeline,
     reports,
@@ -28,6 +29,7 @@ protected.include_router(agents.router, prefix="/agents", tags=["agents"])
 protected.include_router(conversations.router, prefix="/conversations", tags=["conversations"])
 protected.include_router(ingest.router, prefix="/ingest", tags=["ingest"])
 protected.include_router(sentiment.router, prefix="/sentiment", tags=["sentiment"])
+protected.include_router(intent.router, prefix="/intent", tags=["intent"])
 protected.include_router(insights.router, prefix="/insights", tags=["insights"])
 protected.include_router(reports.router, prefix="/reports", tags=["reports"])
 protected.include_router(weekly_router, prefix="/weekly", tags=["weekly"])

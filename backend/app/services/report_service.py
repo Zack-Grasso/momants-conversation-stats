@@ -15,6 +15,8 @@ from app.config import get_settings
 from app.models.conversation import Conversation, Message, SentimentAnalysis
 from app.models.insights import ConversationMetrics, UnansweredQuestion
 from app.services.insights_service import InsightsService
+from app.utils.question_utils import is_question
+from app.utils.referred_conversations import conversation_is_referred
 from app.utils.report_charts import (
     build_channel_volume_slides_html,
     build_office_hours_channel_slides_html,
@@ -22,7 +24,6 @@ from app.utils.report_charts import (
     daily_volume_chart_svg,
     hourly_bars_chart_svg,
     office_hours_pie_chart_svg,
-    sentiment_arc_chart_svg,
 )
 from app.utils.report_data import (
     CHANNEL_LABELS,
@@ -34,8 +35,13 @@ from app.utils.report_data import (
     build_channel_fragments,
     build_channel_timing_insight,
     build_channel_timing_intro,
-    build_channel_timing_stats_html,
+    build_channel_timing_channel_panel_stats_html,
+    build_channel_timing_hourly_panel_stats_html,
     build_channel_volume_insight,
+    build_referred_intent_summary,
+    build_support_hours_explanation_html,
+    compute_support_savings_breakdown,
+    format_support_savings_calc_detail,
     conversation_time_buckets,
     conversation_time_buckets_by_channel,
     daily_conversation_counts,
@@ -51,7 +57,25 @@ from app.utils.report_data import (
     peak_hour_range,
     peak_period_label,
 )
-from app.utils.question_utils import is_question
+from app.utils.sentiment_report import (
+    build_sentiment_headline,
+    build_sentiment_page_html,
+    distribution_from_counts,
+)
+from app.utils.unanswered_report import (
+    FESTIVAL_TOPIC_RE,
+    KNOWLEDGE_GAP_NONSENSE_COUNT,
+    KNOWLEDGE_GAP_PAGE1_COUNT,
+    KNOWLEDGE_GAP_PAGE2_COUNT,
+    MISDIRECTED_TOPIC_RE,
+    OFF_TOPIC_TECH_RE,
+    SILLY_QUESTION_RE,
+    TRIVIAL_QUESTION_RE,
+    build_knowledge_gap_insight,
+    prepare_knowledge_gap_report,
+    render_question_grid,
+    translate_questions_to_dutch,
+)
 from app.utils.report_format import (
     DUTCH_WEEKDAYS,
     all_message_timestamps,
@@ -59,43 +83,22 @@ from app.utils.report_format import (
     format_dutch_int,
     format_eur,
     format_report_num,
+    format_support_hours,
     format_short_date,
     resolve_event_name,
 )
 
 TEMPLATE_PATH = Path(__file__).resolve().parents[2] / "templates" / "conversation-analysis-template-v2.html"
 
-# Skip short greetings and other trivial member messages when picking opportunity examples.
-TRIVIAL_QUESTION_RE = re.compile(
-    r"^(hallo|hoi|hey|hi|dag|dank|thanks|bedankt|oké?|oke|ja|nee|top|super|goed|mooi)\b",
-    re.I,
-)
-SILLY_QUESTION_RE = re.compile(
-    r"\b(kikker|kwak|duif|pigeon|frog|grappig|ik ben een|speel je|pretend)\b|"
-    r"in die taal uitleggen",
-    re.I,
-)
-OFF_TOPIC_TECH_RE = re.compile(
-    r"\b(\.net|c#|python|javascript|dictionary|programming|code\b)\b",
-    re.I,
-)
-FESTIVAL_TOPIC_RE = re.compile(
-    r"\b(ticket|korting|discount|festival|reis|parkeren|camp|line.?up|programma|"
-    r"entree|toegang|bus|trein|hotel|presale|voorverkoop|order)\b",
-    re.I,
-)
-MISDIRECTED_TOPIC_RE = re.compile(r"\b(aangifte|belasting|tax return)\b", re.I)
 URL_RE = re.compile(r"https?://\S+")
 STATUS_PRIORITY = {"weak_answer": 0, "not_answered": 1, "no_reply": 2}
-# A conversation counts as "doorverwezen" (referred to the event's customer service) when any
-# agent message contains an email address.
-EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 
 TEMPLATE_VARS = [
     "event_name",
     "conversations_total",
     "avg_sentiment_label",
     "dominant_mood",
+    "sentiment_headline",
     "date_range",
     "messages_total",
     "pct_resolved",
@@ -131,6 +134,11 @@ TEMPLATE_VARS = [
     "total_unanswered_questions",
     "pct_unanswered",
     "unanswered_insight",
+    "pct_nonsense",
+    "nonsense_count",
+    "substantive_count",
+    "pct_substantive_unanswered",
+    "pct_substantive_total",
     "answered_questions_insight",
     "unanswered_no_reply_count",
     "unanswered_weak_answer_count",
@@ -156,6 +164,7 @@ TEMPLATE_VARS = [
     "count_resolved",
     "count_referred",
     "count_other_handling",
+    "referred_intent_summary",
     "stats_support_hourly_rate",
     "stats_support_calc_detail",
     "stats_assisted_revenue_detail",
@@ -185,7 +194,9 @@ class ReportService:
                 select(UnansweredQuestion.message_id).where(UnansweredQuestion.agent_id == agent_id)
             )
         )
-        answered_ranked = _rank_answered_questions(conversations, unanswered_message_ids, limit=18)
+        answered_ranked = _translate_ranked_questions(
+            _rank_answered_questions(conversations, unanswered_message_ids, limit=18)
+        )
         unanswered = list(
             self.db.scalars(
                 select(UnansweredQuestion)
@@ -224,9 +235,13 @@ class ReportService:
         set_num("avg_stars", avg_stars)
 
         dominant_polarity, dominant_mood = self._sentiment_summary(agent_id)
+        polarity_counts = self._polarity_counts(agent_id)
+        sentiment_dist = distribution_from_counts(polarity_counts)
+        emotion_rows = self._sentiment_emotion_rows(agent_id)
         sentiment_label = POLARITY_LABEL_NL.get(dominant_polarity) if dominant_polarity else None
         set_var("avg_sentiment_label", sentiment_label or _sentiment_label(avg_stars), required=False)
         set_var("dominant_mood", dominant_mood, required=False)
+        set_var("sentiment_headline", build_sentiment_headline(sentiment_dist), required=False)
 
         message_timestamps = all_message_timestamps(conversations)
         set_var("date_range", format_date_range(message_timestamps) if message_timestamps else None)
@@ -239,12 +254,12 @@ class ReportService:
         referred_count = sum(
             1
             for conversation in conversations
-            if _conversation_referred(conversation)
+            if conversation_is_referred(conversation)
         )
         resolved_count = sum(
             1
             for conversation in conversations
-            if conversation.resolved is True and not _conversation_referred(conversation)
+            if conversation.resolved is True and not conversation_is_referred(conversation)
         )
         set_num("pct_resolved", _pct(resolved_count, total_conversations), digits=0)
         set_num("pct_referred", _pct(referred_count, total_conversations), digits=0)
@@ -252,6 +267,22 @@ class ReportService:
         set_var("count_resolved", format_dutch_int(resolved_count), required=False)
         set_var("count_referred", format_dutch_int(referred_count), required=False)
         set_var("count_other_handling", format_dutch_int(other_handling_count), required=False)
+
+        referred_intent_counts: Counter[str] = Counter()
+        labeled_referred = 0
+        for conversation in conversations:
+            if not conversation_is_referred(conversation):
+                continue
+            metric = metrics_by_conversation.get(conversation.id)
+            if metric and metric.intent_label:
+                referred_intent_counts[metric.intent_label] += 1
+                labeled_referred += 1
+        referred_intent_summary = build_referred_intent_summary(
+            referred_count,
+            dict(referred_intent_counts),
+            labeled_count=labeled_referred if labeled_referred else None,
+        )
+        set_var("referred_intent_summary", referred_intent_summary or None, required=False)
 
         if total_conversations and messages_total:
             set_num(
@@ -371,13 +402,32 @@ class ReportService:
         set_var("unanswered_semantic_count", breakdown.get("not_answered", 0), required=False)
 
         examples = [item.question_text.strip() for item in unanswered if item.question_text.strip()]
+        hf_cap = get_settings().report_nonsense_hf_max_questions
+        knowledge_gap = prepare_knowledge_gap_report(
+            examples,
+            total_unanswered=total_unanswered,
+            hf_max=hf_cap,
+        )
+        question_total = sum(item.member_messages for item in metrics) if metrics else 0
+        set_num("pct_nonsense", knowledge_gap.pct_nonsense, digits=0, required=False)
+        set_var("nonsense_count", format_dutch_int(knowledge_gap.nonsense_count), required=False)
+        set_var("substantive_count", format_dutch_int(knowledge_gap.substantive_count), required=False)
+        set_num("pct_substantive_unanswered", knowledge_gap.pct_substantive, digits=0, required=False)
+        set_num(
+            "pct_substantive_total",
+            knowledge_gap.pct_substantive_of_all(
+                question_total,
+                unanswered_pct=overview.get("unanswered_pct"),
+            ),
+            digits=1,
+            required=False,
+        )
         set_var(
             "unanswered_insight",
-            _build_unanswered_insight(
+            build_knowledge_gap_insight(
+                knowledge_gap,
                 breakdown,
-                total_unanswered,
                 overview.get("unanswered_pct"),
-                examples[0] if examples else "",
             ),
             required=False,
         )
@@ -394,10 +444,17 @@ class ReportService:
         set_num("pct_depth_deep", 100 * depth.get("deep", 0) / depth_total, digits=0, required=False)
 
         first_responses = [item.first_response_seconds for item in metrics if item.first_response_seconds is not None]
-        set_var("median_response_fmt", _format_duration(overview.get("median_response_seconds")))
+        conv_medians = [item.median_response_seconds for item in metrics if item.median_response_seconds is not None]
+        # Mean first-response is skewed by long-tail outliers; median (~5s) is the typical first reply.
+        # Per-conversation median gaps averaged (~8s) reflects follow-up response times better than the
+        # median-of-medians (~5s) for the "mediaan" slot on page 2.
         set_var(
             "avg_first_response_fmt",
-            _format_duration(statistics.mean(first_responses) if first_responses else None),
+            _format_duration(statistics.median(first_responses) if first_responses else None),
+        )
+        set_var(
+            "median_response_fmt",
+            _format_duration(statistics.mean(conv_medians) if conv_medians else None),
         )
         set_var("p95_response_fmt", _format_duration(overview.get("p95_response_seconds")))
 
@@ -418,7 +475,7 @@ class ReportService:
             variables["stats_conversations_total"] = "—"
 
         if momants_stats.hours_saved is not None:
-            set_var("stats_hours_saved", format_dutch_int(momants_stats.hours_saved), required=False)
+            set_var("stats_hours_saved", format_support_hours(momants_stats.hours_saved), required=False)
         else:
             variables["stats_hours_saved"] = "—"
 
@@ -437,20 +494,26 @@ class ReportService:
 
         hours_saved = momants_stats.hours_saved
         support_cost = momants_stats.support_cost_saved
-        if hours_saved and support_cost and hours_saved > 0:
-            hourly_rate = support_cost / hours_saved
-            rate_fmt = format_eur(hourly_rate, compact=False)
-            cost_fmt = format_eur(support_cost, compact=False)
-            hours_fmt = format_dutch_int(hours_saved)
+        savings_breakdown = compute_support_savings_breakdown(
+            resolved_count, hours_saved, support_cost
+        )
+        if savings_breakdown:
+            rate_fmt = format_eur(savings_breakdown.hourly_rate, compact=False)
             set_var("stats_support_hourly_rate", f"{rate_fmt}/uur", required=False)
             set_var(
                 "stats_support_calc_detail",
-                f"{hours_fmt} uren × {rate_fmt}/uur = {cost_fmt}",
+                format_support_savings_calc_detail(savings_breakdown),
                 required=False,
             )
         else:
             variables["stats_support_hourly_rate"] = "—"
             variables["stats_support_calc_detail"] = "—"
+
+        support_explanation_html = build_support_hours_explanation_html(
+            resolved_count=resolved_count,
+            hours_saved=hours_saved,
+            support_cost_saved=support_cost,
+        )
 
         for key in TEMPLATE_VARS:
             variables.setdefault(key, "—")
@@ -487,12 +550,12 @@ class ReportService:
         )
 
         active_channel_count = len(active_channels(dict(channel_counts)))
-        total_pages = 9 + (2 * active_channel_count)
+        total_pages = 11
         channel_volume_start = 4
-        channels_timing_page = 3 + active_channel_count + 1
-        bereikbaarheid_page = channels_timing_page + 1
-        bereikbaarheid_channels_start = bereikbaarheid_page + 1
-        sentiment_page = bereikbaarheid_channels_start + active_channel_count
+        channels_timing_page = 5
+        bereikbaarheid_page = 6
+        bereikbaarheid_channels_start = 7
+        sentiment_page = 8
         unanswered_1_page = sentiment_page + 1
         unanswered_2_page = unanswered_1_page + 1
         value_page = unanswered_2_page + 1
@@ -509,6 +572,12 @@ class ReportService:
 
         date_range_text = variables.get("date_range", "—")
         fragments = {
+            "referred_intent_li": (
+                f'<li style="font-size:13px;color:var(--muted);margin-top:4px">{referred_intent_summary}</li>'
+                if referred_intent_summary
+                else ""
+            ),
+            "stats_support_explanation_html": support_explanation_html,
             "channel_volume_slides": build_channel_volume_slides_html(
                 daily_by_channel,
                 all_days,
@@ -527,10 +596,14 @@ class ReportService:
                 page_start=bereikbaarheid_channels_start,
                 total_pages=total_pages,
             ),
-            "channel_timing_stats": build_channel_timing_stats_html(
+            "channel_timing_channel_stats": build_channel_timing_channel_panel_stats_html(
+                dict(channel_counts),
+                len(all_days),
+                total_conversations,
+            ),
+            "channel_timing_hourly_stats": build_channel_timing_hourly_panel_stats_html(
                 dict(channel_counts),
                 hourly_by_channel,
-                len(all_days),
                 peak_hour_int,
                 hourly_avg.get(peak_hour_int) if peak_hour_int is not None and hourly_avg else None,
                 total_conversations,
@@ -540,10 +613,32 @@ class ReportService:
             ),
             "chart_slide2_inner": daily_volume_chart_svg(daily_counts, peak_day_dt),
             "chart_slide3_inner": hourly_bars_chart_svg(hour_counts, peak_hour_int),
-            "chart_slide4_inner": sentiment_arc_chart_svg(arc, avg_start, avg_end),
+            "sentiment_page_content": build_sentiment_page_html(
+                sentiment_dist,
+                emotion_rows,
+                overview,
+                dominant_mood=dominant_mood,
+                intent_breakdown=overview.get("intent_breakdown") or {},
+            ),
             "chart_slide5_inner": office_hours_pie_chart_svg(time_buckets),
-            "unanswered_examples_page1": _render_unanswered_examples(examples, 0, 18),
-            "unanswered_examples_page2": _render_unanswered_examples_page2(examples),
+            "unanswered_examples_page1": render_question_grid(
+                list(knowledge_gap.substantive_questions),
+                0,
+                KNOWLEDGE_GAP_PAGE1_COUNT,
+                empty_label="Geen echte kennislacunes gevonden in deze periode.",
+            ),
+            "unanswered_examples_page2": render_question_grid(
+                list(knowledge_gap.substantive_questions),
+                KNOWLEDGE_GAP_PAGE1_COUNT,
+                KNOWLEDGE_GAP_PAGE2_COUNT,
+                empty_label="Alle relevante kennislacunes staan op de vorige pagina.",
+            ),
+            "nonsense_examples": render_question_grid(
+                list(knowledge_gap.nonsense_questions),
+                0,
+                KNOWLEDGE_GAP_NONSENSE_COUNT,
+                empty_label="Geen niet-serieuze vragen gedetecteerd.",
+            ),
             "answered_questions_grid": _render_answered_questions(
                 answered_ranked, 0, 18, compact=True, tiny=True
             ),
@@ -561,13 +656,7 @@ class ReportService:
             "chart_source": chart_source,
         }
 
-    def _sentiment_summary(self, agent_id: str) -> tuple[str | None, str | None]:
-        """Return (dominant_polarity, dominant_mood_nl) across the agent's member-message sentiment.
-
-        Polarity drives the headline label (most common of positive/neutral/negative). The mood is
-        the most common top emotion, excluding the catch-all "neutral" so a meaningful feeling
-        surfaces (falls back to "neutraal" only when nothing else is present).
-        """
+    def _polarity_counts(self, agent_id: str) -> dict[str, int]:
         base_join = (
             select(SentimentAnalysis.polarity, func.count())
             .join(Message, Message.id == SentimentAnalysis.message_id)
@@ -575,7 +664,25 @@ class ReportService:
             .where(Conversation.agent_id == agent_id, SentimentAnalysis.polarity.is_not(None))
             .group_by(SentimentAnalysis.polarity)
         )
-        polarity_counts = {polarity: count for polarity, count in self.db.execute(base_join).all()}
+        return {polarity: count for polarity, count in self.db.execute(base_join).all()}
+
+    def _sentiment_emotion_rows(self, agent_id: str) -> list[tuple[str | None, str | None]]:
+        rows = self.db.execute(
+            select(SentimentAnalysis.polarity, SentimentAnalysis.emotions_json)
+            .join(Message, Message.id == SentimentAnalysis.message_id)
+            .join(Conversation, Conversation.id == Message.conversation_id)
+            .where(Conversation.agent_id == agent_id, SentimentAnalysis.polarity.is_not(None))
+        ).all()
+        return [(polarity, emotions_json) for polarity, emotions_json in rows]
+
+    def _sentiment_summary(self, agent_id: str) -> tuple[str | None, str | None]:
+        """Return (dominant_polarity, dominant_mood_nl) across the agent's member-message sentiment.
+
+        Polarity drives the headline label (most common of positive/neutral/negative). The mood is
+        the most common top emotion, excluding the catch-all "neutral" so a meaningful feeling
+        surfaces (falls back to "neutraal" only when nothing else is present).
+        """
+        polarity_counts = self._polarity_counts(agent_id)
         dominant_polarity = max(polarity_counts, key=polarity_counts.get) if polarity_counts else None
 
         emotion_jsons = self.db.scalars(
@@ -703,13 +810,6 @@ def _format_duration(seconds: float | None) -> str:
     return f"{hours:.1f}u" if hours < 10 else f"{hours:.0f}u"
 
 
-def _conversation_referred(conversation: Conversation) -> bool:
-    return any(
-        message.from_agent and EMAIL_RE.search(message.content or "")
-        for message in conversation.messages
-    )
-
-
 def _page2_channel_summary(channel_counts: dict[str, int], total: int) -> str:
     if not total:
         return "—"
@@ -719,38 +819,6 @@ def _page2_channel_summary(channel_counts: dict[str, int], total: int) -> str:
         pct = round(100 * count / total)
         parts.append(f"{CHANNEL_LABELS[key]} {format_dutch_int(count)} ({pct}%)")
     return " · ".join(parts) if parts else "—"
-
-
-def _render_unanswered_examples(examples: list[str], start: int, count: int) -> str:
-    cells: list[str] = []
-    for offset in range(count):
-        idx = start + offset
-        if idx >= len(examples):
-            break
-        text = _truncate(examples[idx], 100)
-        cells.append(
-            f'<div class="q-cell"><span class="q-text">"{_escape_html(text)}"</span></div>'
-        )
-    return "\n          ".join(cells)
-
-
-def _render_unanswered_examples_page2(examples: list[str], start: int = 18, count: int = 18) -> str:
-    cells: list[str] = []
-    for offset in range(count):
-        idx = start + offset
-        if idx >= len(examples):
-            break
-        text = _truncate(examples[idx], 100)
-        cells.append(
-            f'<div class="q-cell"><span class="q-text">"{_escape_html(text)}"</span></div>'
-        )
-
-    if len(examples) <= start or len(examples) < start + count:
-        cells.append(
-            '<div class="q-cell q-remainder">Alle overige vragen zijn beantwoord.</div>'
-        )
-
-    return "\n          ".join(cells)
 
 
 def _is_substantive_question(text: str) -> bool:
@@ -837,42 +905,16 @@ def _render_opportunity_cards(
     return "\n      ".join(cards) if cards else ""
 
 
-def _build_unanswered_insight(
-    breakdown: dict[str, int],
-    total_unanswered: int,
-    unanswered_pct: float | None,
-    top_example: str,
-) -> str:
-    if total_unanswered <= 0:
-        return "Geen onbeantwoorde vragen in deze periode — de agent beantwoordt alles wat mensen vroegen."
-
-    weak = breakdown.get("weak_answer", 0)
-    no_reply = breakdown.get("no_reply", 0)
-    semantic = breakdown.get("not_answered", 0)
-    breakdown_total = weak + no_reply + semantic or total_unanswered
-
-    categories = [
-        (weak, "onvoldoende respons", "Verrijk de kennisbank zodat de agent de vraag volledig afdekt."),
-        (no_reply, "geen reactie", "Zet vaste flows of escalatie op zodat geen enkele vraag onbeantwoord blijft."),
-        (semantic, "antwoord miste de kern", "Train de agent om de kern van de vraag te herkennen en direct te beantwoorden."),
-    ]
-    dominant_count, label, advice = max(categories, key=lambda item: item[0])
-    dominant_pct = round(100 * dominant_count / breakdown_total) if breakdown_total else 0
-    pct_label = format_report_num(unanswered_pct, 0) if unanswered_pct is not None else "—"
-
-    parts = [
-        f"{dominant_count} van {total_unanswered} onbeantwoorde vragen ({dominant_pct}%) hadden een {label}",
-        f"— dat is {pct_label}% van alle vragen van mensen.",
-        advice,
-    ]
-    if top_example.strip():
-        parts.append(f'Voorbeeld: "{_truncate(top_example, 90)}".')
-    return " ".join(parts)
-
-
 def _normalize_question_key(text: str) -> str:
     stripped = re.sub(r"[^\w\s]", "", text.lower(), flags=re.UNICODE)
     return " ".join(stripped.split())
+
+
+def _translate_ranked_questions(ranked: list[tuple[str, int]]) -> list[tuple[str, int]]:
+    if not ranked:
+        return []
+    translated = translate_questions_to_dutch([text for text, _ in ranked])
+    return [(translated[index], count) for index, (_, count) in enumerate(ranked)]
 
 
 def _rank_answered_questions(
@@ -956,7 +998,6 @@ def _build_answered_questions_insight(ranked: list[tuple[str, int]]) -> str:
 
 
 def _truncate(value: str, max_len: int) -> str:
-    cleaned = " ".join(value.split())
-    if len(cleaned) <= max_len:
-        return cleaned
-    return cleaned[: max_len - 1].rstrip() + "…"
+    from app.utils.report_html import truncate
+
+    return truncate(value, max_len)

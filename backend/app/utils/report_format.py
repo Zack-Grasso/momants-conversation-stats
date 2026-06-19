@@ -100,6 +100,24 @@ def format_dutch_int(value: float | int) -> str:
     return f"{number:,}".replace(",", ".")
 
 
+def format_support_hours(value: float | int | None) -> str:
+    """Format saved support hours without rounding 828,75 up to 829."""
+    if value is None:
+        return "—"
+    amount = float(value)
+    if abs(amount - round(amount)) < 0.05:
+        return format_dutch_int(round(amount))
+    whole = int(amount)
+    decimals = int(round((amount - whole) * 100))
+    whole_fmt = format_dutch_int(whole) if whole >= 1000 else str(whole)
+    return f"{whole_fmt},{decimals:02d}"
+
+
+def format_dutch_decimal(value: float, *, digits: int = 1) -> str:
+    formatted = format_report_num(value, digits) or str(value)
+    return formatted.replace(".", ",")
+
+
 def format_eur(value: float | int | None, *, compact: bool = True) -> str:
     if value is None:
         return "—"

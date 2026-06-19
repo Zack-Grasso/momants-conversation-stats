@@ -11,7 +11,15 @@ from typing import Protocol
 
 from app.integrations.momants_client import get_momants_client
 from app.ml.intent_labels import INTENT_DESCRIPTIONS
-from app.utils.report_format import all_message_timestamps, format_dutch_int, format_report_num, format_short_date
+from app.utils.report_format import (
+    all_message_timestamps,
+    format_dutch_decimal,
+    format_dutch_int,
+    format_eur,
+    format_report_num,
+    format_short_date,
+    format_support_hours,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -38,9 +46,30 @@ def channel_pill_icon(channel: str) -> str:
 
 # Per-channel display config for the report. Channels with zero conversations are hidden.
 CHANNEL_DISPLAY = {
-    "whatsapp": {"label": "WhatsApp", "icon": "message-circle", "pill": "wa", "bar": "#151515"},
-    "chat": {"label": "Chat", "icon": "monitor", "pill": "chat", "bar": "#151515"},
-    "instagram": {"label": "Instagram", "icon": "instagram", "pill": "ig", "bar": "#9ecf6a"},
+    "whatsapp": {
+        "label": "WhatsApp",
+        "icon": "message-circle",
+        "pill": "wa",
+        "bar": "#151515",
+        "chart_stroke": "#5a9e38",
+        "chart_fill": "#E2F5C9",
+    },
+    "chat": {
+        "label": "Chat",
+        "icon": "monitor",
+        "pill": "chat",
+        "bar": "#151515",
+        "chart_stroke": "#3d6b8c",
+        "chart_fill": "#c5dde8",
+    },
+    "instagram": {
+        "label": "Instagram",
+        "icon": "instagram",
+        "pill": "ig",
+        "bar": "#9ecf6a",
+        "chart_stroke": "#c45c8a",
+        "chart_fill": "#f0d0df",
+    },
 }
 CHANNEL_ORDER = ["whatsapp", "chat", "instagram"]
 
@@ -78,13 +107,15 @@ def build_channel_fragments(
         count = channel_counts.get(c, 0)
         pct = round(100 * count / total) if total else 0
         rows.append(
-            '<div>'
-            '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">'
-            f'<span style="font-weight:600;font-size:14.5px">{lucide(cfg["icon"])} {cfg["label"]}</span>'
-            f'<span style="font-weight:800;font-size:14.5px">{count} '
-            f'<span style="color:var(--muted);font-weight:400;font-size:12px">{pct}%</span></span>'
+            '<div class="channel-breakdown-row">'
+            '<div class="channel-breakdown-head">'
+            f'<span class="channel-breakdown-label">'
+            f'<span class="channel-breakdown-swatch" style="background:{cfg["chart_stroke"]}"></span>'
+            f'{cfg["label"]}</span>'
+            f'<span class="channel-breakdown-value">{format_dutch_int(count)} '
+            f'<span class="channel-breakdown-pct">{pct}%</span></span>'
             '</div>'
-            f'<div class="bar-track"><div class="bar-fill" style="background:{cfg["bar"]};width:{pct}%"></div></div>'
+            f'<div class="bar-track bar-track-lg"><div class="bar-fill" style="background:{cfg["chart_stroke"]};width:{pct}%"></div></div>'
             '</div>'
         )
 
@@ -518,7 +549,8 @@ def build_channel_timing_intro(channel_counts: dict[str, int], total: int) -> st
         channel_text = ", ".join(labels[:-1]) + " en " + labels[-1]
     return (
         f"In deze periode kwamen {format_dutch_int(total)} gesprekken binnen via {channel_text}. "
-        "Links zie je de verdeling per kanaal; rechts het gemiddelde aantal gesprekken per uur."
+        "Links zie je welk kanaal bezoekers het meest gebruiken; rechts op welk uur van de dag "
+        "het gemiddeld het drukst is."
     )
 
 
@@ -562,6 +594,115 @@ def build_channel_timing_insight(
     )
 
 
+def _timing_panel_stat(
+    *,
+    label: str,
+    icon: str,
+    value: str,
+    detail: str,
+    variant: str = "default",
+) -> str:
+    extra = ""
+    if variant == "dark":
+        extra = ' dark'
+    elif variant == "green":
+        extra = ' green'
+    return (
+        f'<div class="timing-panel-stat{extra}">'
+        f'<div class="lbl"><i data-lucide="{icon}" class="ic"></i> {escape(label)}</div>'
+        f'<div class="num">{value}</div>'
+        f'<div class="sub">{detail}</div>'
+        "</div>"
+    )
+
+
+def build_channel_timing_channel_panel_stats_html(
+    channel_counts: dict[str, int],
+    daily_day_count: int,
+    total: int,
+) -> str:
+    active = active_channels(channel_counts)
+    if not total or not active:
+        return ""
+
+    days = max(daily_day_count, 1)
+    dom_key = max(active, key=lambda c: channel_counts.get(c, 0))
+    dom_count = channel_counts.get(dom_key, 0)
+    dom_pct = round(100 * dom_count / total)
+    dom_label = CHANNEL_DISPLAY[dom_key]["label"]
+
+    avg_parts = [
+        f'{CHANNEL_DISPLAY[c]["label"]} {format_report_num(channel_counts.get(c, 0) / days, 1)}/dag'
+        for c in active
+    ]
+
+    cards = [
+        _timing_panel_stat(
+            label="Dominant kanaal",
+            icon="radio",
+            value=escape(dom_label),
+            detail=(
+                f"{format_dutch_int(dom_count)} van {format_dutch_int(total)} gesprekken ({dom_pct}%) — "
+                "het kanaal waar bezoekers het meest contact opnemen."
+            ),
+        ),
+        _timing_panel_stat(
+            label="Gem. per dag",
+            icon="calendar-days",
+            value=format_report_num(total / days, 1),
+            detail=f"Gemiddeld over {format_dutch_int(days)} dagen · {' · '.join(avg_parts)}",
+            variant="green",
+        ),
+    ]
+    return f'<div class="channels-timing-panel-stats">{"".join(cards)}</div>'
+
+
+def build_channel_timing_hourly_panel_stats_html(
+    channel_counts: dict[str, int],
+    hourly_by_channel: dict[str, dict[int, int]],
+    peak_hour: int | None,
+    peak_hour_avg: float | None,
+    total: int,
+) -> str:
+    active = active_channels(channel_counts)
+    if not total or not active or peak_hour is None:
+        return ""
+
+    avg_label = format_report_num(peak_hour_avg, 1) if peak_hour_avg is not None else "—"
+    range_label = peak_hour_range(peak_hour)
+    cards = [
+        _timing_panel_stat(
+            label="Piek uur",
+            icon="clock",
+            value=f"{peak_hour:02d}:00",
+            detail=(
+                f"Gemiddeld het drukst tussen {escape(range_label)} · "
+                f"{avg_label} gesprekken per uur in dat uur."
+            ),
+            variant="dark",
+        ),
+    ]
+
+    at_peak = {c: hourly_by_channel.get(c, {}).get(peak_hour, 0) for c in active}
+    peak_total = sum(at_peak.values())
+    if peak_total > 0:
+        top_key = max(at_peak, key=at_peak.get)
+        top_pct = round(100 * at_peak[top_key] / peak_total)
+        cards.append(
+            _timing_panel_stat(
+                label="Piek kanaal",
+                icon="zap",
+                value=escape(CHANNEL_DISPLAY[top_key]["label"]),
+                detail=(
+                    f"{top_pct}% van alle gesprekken in het drukste uur "
+                    f"({format_dutch_int(at_peak[top_key])} van {format_dutch_int(peak_total)})."
+                ),
+            )
+        )
+
+    return f'<div class="channels-timing-panel-stats">{"".join(cards)}</div>'
+
+
 def build_channel_timing_stats_html(
     channel_counts: dict[str, int],
     hourly_by_channel: dict[str, dict[int, int]],
@@ -570,58 +711,14 @@ def build_channel_timing_stats_html(
     peak_hour_avg: float | None,
     total: int,
 ) -> str:
-    active = active_channels(channel_counts)
-    if not total or not active:
-        return ""
-
-    days = max(daily_day_count, 1)
-    cards: list[str] = []
-
-    dom_key = max(active, key=lambda c: channel_counts.get(c, 0))
-    dom_count = channel_counts.get(dom_key, 0)
-    dom_pct = round(100 * dom_count / total)
-    cards.append(
-        '<div class="card">'
-        '<div class="lbl"><i data-lucide="radio" class="ic"></i> Dominant kanaal</div>'
-        f'<div class="num" style="font-size:24px">{escape(CHANNEL_DISPLAY[dom_key]["label"])}</div>'
-        f'<div class="sub">{format_dutch_int(dom_count)} gesprekken · {dom_pct}% van totaal</div>'
-        "</div>"
+    """Legacy wrapper — stats now live inside each panel."""
+    channel_stats = build_channel_timing_channel_panel_stats_html(
+        channel_counts, daily_day_count, total
     )
-
-    if peak_hour is not None:
-        cards.append(
-            '<div class="card">'
-            '<div class="lbl"><i data-lucide="clock" class="ic"></i> Drukste uur</div>'
-            f'<div class="num" style="font-size:24px">{peak_hour:02d}:00</div>'
-            f'<div class="sub">gem. {format_report_num(peak_hour_avg, 1) if peak_hour_avg is not None else "—"} gesprekken / uur · {escape(peak_hour_range(peak_hour))}</div>'
-            "</div>"
-        )
-        at_peak = {c: hourly_by_channel.get(c, {}).get(peak_hour, 0) for c in active}
-        peak_total = sum(at_peak.values())
-        if peak_total > 0:
-            top_key = max(at_peak, key=at_peak.get)
-            top_pct = round(100 * at_peak[top_key] / peak_total)
-            cards.append(
-                '<div class="card dark">'
-                '<div class="lbl"><i data-lucide="zap" class="ic"></i> Piek op kanaal</div>'
-                f'<div class="num" style="font-size:24px">{escape(CHANNEL_DISPLAY[top_key]["label"])}</div>'
-                f'<div class="sub">{top_pct}% van gesprekken in piekuur ({format_dutch_int(at_peak[top_key])} gespr.)</div>'
-                "</div>"
-            )
-
-    avg_parts = [
-        f'{CHANNEL_DISPLAY[c]["label"]} {format_report_num(channel_counts.get(c, 0) / days, 1)}/dag'
-        for c in active
-    ]
-    cards.append(
-        '<div class="card green">'
-        '<div class="lbl"><i data-lucide="calendar-days" class="ic"></i> Gem. per dag</div>'
-        f'<div class="num" style="font-size:22px">{format_report_num(total / days, 1)}</div>'
-        f'<div class="sub">{" · ".join(avg_parts)}</div>'
-        "</div>"
+    hourly_stats = build_channel_timing_hourly_panel_stats_html(
+        channel_counts, hourly_by_channel, peak_hour, peak_hour_avg, total
     )
-
-    return f'<div class="channel-timing-stats">{"".join(cards)}</div>'
+    return channel_stats + hourly_stats
 
 
 def build_bereikbaarheid_insight(
@@ -640,7 +737,7 @@ def build_bereikbaarheid_insight(
 
     parts: list[str] = [
         f"{outside_pct:g}% van de gesprekken vond plaats buiten kantooruren (ma–vr 9–17). "
-        "De grote taart toont tijdens vs. buiten kantooruren; de kleine taart zoomt in op die buiten-kantooruren."
+        "De grote taart toont tijdens vs. buiten kantooruren; de kleine taart zoomt in op buiten-kantooruren."
     ]
 
     if outside > 0 and detail:
@@ -856,6 +953,119 @@ def top_intents(intent_breakdown: dict[str, int], limit: int = 6) -> list[Intent
         bar_pct = round(100 * count / top_count, 1)
         rows.append(IntentRow(slug=slug, label=intent_label(slug), count=count, pct=pct, bar_pct=bar_pct))
     return rows
+
+
+def build_referred_intent_summary(
+    referred_count: int,
+    intent_breakdown: dict[str, int],
+    *,
+    labeled_count: int | None = None,
+    limit: int = 3,
+) -> str:
+    if referred_count <= 0:
+        return ""
+    if not intent_breakdown:
+        return "Intent-labels voor doorverwezen gesprekken ontbreken — voer intent-labeling uit."
+
+    rows = top_intents(intent_breakdown, limit=limit)
+    if not rows:
+        return ""
+
+    topic_parts = [f"{row.label.lower()} ({row.pct}%)" for row in rows]
+    if len(topic_parts) == 1:
+        topics = topic_parts[0]
+    elif len(topic_parts) == 2:
+        topics = f"{topic_parts[0]} en {topic_parts[1]}"
+    else:
+        topics = f"{topic_parts[0]}, {topic_parts[1]} en {topic_parts[2]}"
+
+    coverage = ""
+    if labeled_count is not None and labeled_count < referred_count:
+        coverage = f" (gebaseerd op {labeled_count} van {referred_count} doorverwezen gesprekken)"
+
+    return f"Meest gedeeld e-mailadres vanwege: {topics}{coverage}."
+
+
+@dataclass(frozen=True)
+class SupportSavingsBreakdown:
+    handled_count: int
+    hours_saved: float
+    cost_saved: float
+    minutes_per_conversation: float
+    hourly_rate: float
+
+
+def compute_support_savings_breakdown(
+    resolved_count: int,
+    hours_saved: float | None,
+    support_cost_saved: float | None,
+) -> SupportSavingsBreakdown | None:
+    if hours_saved is None or support_cost_saved is None or hours_saved <= 0:
+        return None
+    handled_count = resolved_count if resolved_count > 0 else max(1, int(round(hours_saved * 12)))
+    minutes_per_conversation = (hours_saved * 60) / handled_count
+    hourly_rate = support_cost_saved / hours_saved
+    return SupportSavingsBreakdown(
+        handled_count=handled_count,
+        hours_saved=float(hours_saved),
+        cost_saved=float(support_cost_saved),
+        minutes_per_conversation=minutes_per_conversation,
+        hourly_rate=hourly_rate,
+    )
+
+
+def format_support_savings_calc_detail(breakdown: SupportSavingsBreakdown) -> str:
+    hours_fmt = format_support_hours(breakdown.hours_saved)
+    rate_fmt = format_eur(breakdown.hourly_rate, compact=False)
+    cost_fmt = format_eur(breakdown.cost_saved, compact=False)
+    return f"{hours_fmt} uren × {rate_fmt}/uur = {cost_fmt}"
+
+
+def build_support_hours_explanation_html(
+    *,
+    resolved_count: int,
+    hours_saved: float | None,
+    support_cost_saved: float | None,
+) -> str:
+    """Narrative + bullet breakdown for the page-2 support hours card."""
+    breakdown = compute_support_savings_breakdown(resolved_count, hours_saved, support_cost_saved)
+    if breakdown is None:
+        return (
+            '<p class="card-lead">Geschatte tijd die support anders aan deze gesprekken '
+            "zou besteden, omgerekend naar kosten.</p>"
+        )
+
+    minutes_label = (
+        str(int(breakdown.minutes_per_conversation))
+        if abs(breakdown.minutes_per_conversation - round(breakdown.minutes_per_conversation)) < 0.05
+        else format_dutch_decimal(breakdown.minutes_per_conversation, digits=1)
+    )
+    handled_fmt = format_dutch_int(breakdown.handled_count)
+    hours_fmt = format_support_hours(breakdown.hours_saved)
+    cost_fmt = format_eur(breakdown.cost_saved, compact=False)
+    rate_fmt = format_eur(breakdown.hourly_rate, compact=False)
+    time_calc = (
+        f"{escape(handled_fmt)} gesprekken × {escape(minutes_label)} min ÷ 60 "
+        f"≈ {escape(hours_fmt)} uur"
+    )
+    cost_calc = format_support_savings_calc_detail(breakdown)
+
+    lead = (
+        f"Gemiddeld <strong>{minutes_label} min</strong> per AI-afgehandeld gesprek "
+        f"tegen <strong>{escape(rate_fmt)}</strong>/uur — "
+        f"<strong>{escape(handled_fmt)}</strong> gesprekken volledig zelfstandig opgelost."
+    )
+
+    stats = (
+        f'<div class="support-stats-grid">'
+        f"<div>AI-afgehandeld</div><div><strong>{escape(handled_fmt)}</strong></div>"
+        f"<div>Gem. gesprekstijd</div><div><strong>{escape(minutes_label)} min</strong></div>"
+        f"<div>Bespaarde uren</div><div><strong>{escape(hours_fmt)} uur</strong></div>"
+        f"<div>Kostenbesparing</div><div><strong>{escape(cost_fmt)}</strong></div>"
+        f"</div>"
+        f'<p class="support-calc">{escape(time_calc)} · {escape(cost_calc)}</p>'
+    )
+    return f'<p class="card-lead">{lead}</p>{stats}'
 
 
 def render_intent_breakdown_html(intent_breakdown: dict[str, int], limit: int = 6) -> str:

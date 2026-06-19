@@ -112,6 +112,16 @@
     vertical-align: -0.16em;
     stroke-width: 2;
     flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .ic svg,
+  .lbl svg {
+    width: 1.05em !important;
+    height: 1.05em !important;
+    max-width: 16px;
+    max-height: 16px;
   }
 
   /* ── body area: fills all remaining vertical space ── */
@@ -340,15 +350,46 @@
     gap: 18px;
   }
   .slide-overview .card-split .card-lead {
-    font-size: 13.5px;
-    line-height: 1.6;
-    margin-bottom: 14px;
-  }
-  .slide-overview .card-split .card-details {
     font-size: 13px;
     line-height: 1.55;
+    margin-bottom: 10px;
   }
-  .slide-overview .card-split .card-details li + li { margin-top: 9px; }
+  .slide-overview .card-split .card-details {
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+  .slide-overview .card-split .card-details li + li { margin-top: 6px; }
+  .slide-overview .card-split.support-hours-card .card-split-body {
+    grid-template-columns: minmax(0, 1fr) 200px;
+    align-items: start;
+  }
+  .slide-overview .card-split.support-hours-card .card-split-info {
+    justify-content: flex-start;
+    overflow: hidden;
+  }
+  .slide-overview .card-split.support-hours-card .card-lead {
+    font-size: 12.5px;
+    line-height: 1.5;
+    margin-bottom: 8px;
+  }
+  .slide-overview .card-split.support-hours-card .support-stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 14px;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--muted);
+  }
+  .slide-overview .card-split.support-hours-card .support-stats-grid strong {
+    color: var(--navy);
+    font-weight: 700;
+  }
+  .slide-overview .card-split.support-hours-card .support-calc {
+    margin-top: 8px;
+    font-size: 11.5px;
+    line-height: 1.45;
+    color: #888;
+  }
   .slide-overview .card-split .metric-rows {
     font-size: 13px;
     gap: 9px;
@@ -368,13 +409,6 @@
   }
   .slide-overview .card-split .lbl {
     font-size: 12px;
-  }
-
-  .logo .mom-logo-text {
-    font-size: 22px;
-    font-weight: 800;
-    letter-spacing: -.02em;
-    color: #151515;
   }
 
   /* page 3 — full-width volume chart */
@@ -442,6 +476,53 @@
     flex: 1;
     min-height: 320px;
     overflow: visible;
+  }
+  .slide-channel-volume .channel-volume-combined {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: visible;
+    padding: 14px 18px 12px;
+    gap: 6px;
+  }
+  .slide-channel-volume .channel-volume-combined svg {
+    flex: 1 1 auto;
+    width: 100%;
+    min-height: 360px;
+    overflow: visible;
+  }
+  .slide-channel-volume .channel-volume-insight {
+    font-size: 13px;
+    padding: 12px 16px;
+  }
+  .channel-volume-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px 28px;
+    padding-bottom: 4px;
+  }
+  .channel-volume-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+  .channel-volume-swatch {
+    width: 12px;
+    height: 12px;
+    border-radius: 999px;
+    flex-shrink: 0;
+  }
+  .channel-volume-legend-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .channel-volume-legend-meta {
+    font-size: 12.5px;
+    color: var(--muted);
+    font-weight: 500;
   }
 
   /* page 3 — per-channel volume charts (legacy grid — unused) */
@@ -516,13 +597,160 @@
     overflow: visible;
   }
 
+  .channel-breakdown-row + .channel-breakdown-row { margin-top: 14px; }
+  .channel-breakdown-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 8px;
+  }
+  .channel-breakdown-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    font-size: 15px;
+  }
+  .channel-breakdown-swatch {
+    width: 11px;
+    height: 11px;
+    border-radius: 999px;
+    flex-shrink: 0;
+  }
+  .channel-breakdown-value {
+    font-weight: 800;
+    font-size: 15px;
+  }
+  .channel-breakdown-pct {
+    color: var(--muted);
+    font-weight: 400;
+    font-size: 12.5px;
+  }
+
   /* page 5 — kanalen & timing */
   .slide-channels-timing h1 { font-size: 38px; }
+  .slide-channels-timing .body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
   .slide-channels-timing .channels-timing-intro {
     flex-shrink: 0;
     margin: 0 0 12px;
     font-size: 13.5px;
     padding: 14px 18px;
+  }
+  .channels-timing-panels {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: row;
+    gap: 18px;
+  }
+  .channels-timing-panel {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    padding: 20px 22px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .channels-timing-panel-title {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+  .channels-timing-panel-chart {
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: stretch;
+    gap: 8px;
+    padding: 0;
+  }
+  .channels-timing-panel-chart .channel-breakdown-rows {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 18px;
+    padding: 8px 0;
+  }
+  .channels-timing-panel-chart svg {
+    width: 100%;
+    flex: 1 1 auto;
+    min-height: 260px;
+    overflow: visible;
+    display: block;
+  }
+  .channels-timing-panel-stats {
+    flex-shrink: 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: auto;
+    padding-top: 8px;
+    border-top: 1px solid var(--card-border);
+  }
+  .timing-panel-stat {
+    background: #f7f7f5;
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .timing-panel-stat.dark {
+    background: #151515;
+    border-color: #151515;
+    color: #fff;
+  }
+  .timing-panel-stat.dark .lbl,
+  .timing-panel-stat.dark .sub {
+    color: rgba(255, 255, 255, 0.78);
+  }
+  .timing-panel-stat.dark .num {
+    color: #fff;
+  }
+  .timing-panel-stat.dark .lbl svg {
+    stroke: #9ecf6a;
+  }
+  .timing-panel-stat.green .num {
+    color: #151515;
+  }
+  .timing-panel-stat.green {
+    background: var(--accent);
+    border-color: var(--accent-border);
+  }
+  .timing-panel-stat .lbl {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .timing-panel-stat .num {
+    font-size: 22px;
+    font-weight: 800;
+    line-height: 1.15;
+    margin-bottom: 4px;
+  }
+  .timing-panel-stat .sub {
+    font-size: 11.5px;
+    line-height: 1.45;
+    color: var(--muted);
+  }
+  .bar-track-lg {
+    height: 12px;
+  }
+  .bar-track-lg .bar-fill {
+    height: 12px;
   }
   .channel-timing-stats {
     flex-shrink: 0;
@@ -552,33 +780,148 @@
   .office-hours-total {
     flex: 1;
     min-height: 0;
-    padding: 16px 20px 12px;
+    padding: 18px 22px 16px;
     display: flex;
     flex-direction: column;
   }
+  .office-hours-total-pie {
+    justify-content: center;
+  }
   .office-hours-total svg {
-    flex: 1;
-    min-height: 260px;
+    flex-shrink: 0;
     overflow: visible;
   }
-  .slide-bereikbaarheid-channels h1 { font-size: 38px; }
+  .office-hours-total-pie svg {
+    flex: 1;
+    min-height: 320px;
+  }
+  .office-hours-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-top: 16px;
+    flex-shrink: 0;
+  }
+  .oh-stat-tile {
+    background: #fafaf8;
+    border: 1px solid #ececea;
+    border-radius: 10px;
+    padding: 12px 14px;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    min-width: 0;
+  }
+  .oh-stat-swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    margin-top: 4px;
+    flex-shrink: 0;
+  }
+  .oh-stat-copy { min-width: 0; }
+  .oh-stat-label {
+    font-size: 10px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 700;
+    line-height: 1.3;
+  }
+  .oh-stat-value {
+    font-size: 24px;
+    font-weight: 800;
+    color: var(--navy);
+    letter-spacing: -.02em;
+    line-height: 1.05;
+    margin-top: 4px;
+  }
+  .oh-stat-count {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 4px;
+    line-height: 1.35;
+  }
+  .office-hours-compare {
+    flex: 1;
+    min-height: 0;
+    padding: 16px 12px 14px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .office-hours-compare svg {
+    width: 100%;
+    min-height: 280px;
+    overflow: visible;
+  }
   .slide-bereikbaarheid-channels .body {
     flex: 1;
     min-height: 0;
+    display: flex;
+    flex-direction: column;
     padding-top: 8px;
   }
-  .office-hours-channel-full {
+  .office-hours-shared-legend {
+    flex-shrink: 0;
+    background: #f7f7f5;
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    padding: 12px 18px;
+    margin-bottom: 12px;
+  }
+  .office-hours-legend-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 18px;
+  }
+  .office-hours-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .office-hours-legend-swatch {
+    width: 11px;
+    height: 11px;
+    border-radius: 999px;
+    flex-shrink: 0;
+  }
+  .office-hours-legend-note {
+    margin: 0;
+    font-size: 11.5px;
+    line-height: 1.45;
+    color: var(--muted);
+  }
+  .office-hours-channels-grid {
     flex: 1;
     min-height: 0;
-    padding: 14px 18px 10px;
+    display: grid;
+    gap: 14px;
+  }
+  .office-hours-channels-grid.cols-1 {
+    grid-template-columns: 1fr;
+    grid-auto-rows: minmax(0, 1fr);
+  }
+  .office-hours-channels-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+  .office-hours-channels-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+  .office-hours-panel {
+    min-height: 0;
+    padding: 14px 16px 10px;
     display: flex;
     flex-direction: column;
   }
-  .office-hours-channel-full svg {
+  .office-hours-channels-grid.cols-1 .office-hours-panel svg {
+    min-height: 250px;
+  }
+  .office-hours-panel svg {
     flex: 1;
-    min-height: 240px;
+    min-height: 320px;
     overflow: visible;
   }
+  .slide-bereikbaarheid-channels h1 { font-size: 38px; }
   .office-hours-head {
     font-size: 12px;
     font-weight: 700;
@@ -791,6 +1134,245 @@
     overflow: hidden;
   }
 
+  .knowledge-gap-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    flex-shrink: 0;
+  }
+  .knowledge-gap-stats .card { padding: 14px 18px; }
+  .knowledge-gap-stats .num { font-size: 32px; }
+  .knowledge-gap-stats .card.muted {
+    background: #f7f7f5;
+    border-color: #ececea;
+  }
+
+  .slide-knowledge-gap .eyebrow {
+    margin-top: 10px;
+    margin-bottom: 14px;
+  }
+  .slide-knowledge-gap h1 {
+    font-size: 38px;
+    margin-bottom: 20px;
+  }
+  .slide-knowledge-gap .page-intro {
+    margin-bottom: 18px;
+  }
+  .knowledge-gap-panel {
+    flex-shrink: 0;
+    background: var(--accent);
+    border: 1px solid var(--accent-border);
+    border-radius: 12px;
+    padding: 14px 18px;
+  }
+  .knowledge-gap-panel .lbl {
+    color: var(--accent-dark);
+    margin-bottom: 4px;
+    font-size: 9.5px;
+  }
+  .kg-compact-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+  }
+  .kg-compact-item {
+    padding: 0 14px;
+    border-left: 1px solid var(--accent-border);
+  }
+  .kg-compact-item:first-child {
+    padding-left: 0;
+    border-left: none;
+  }
+  .kg-compact-item:last-child {
+    padding-right: 0;
+  }
+  .kg-num-compact {
+    font-size: 28px;
+    font-weight: 800;
+    color: #151515;
+    letter-spacing: -.03em;
+    line-height: 1;
+  }
+  .kg-sub-compact {
+    font-size: 11px;
+    color: var(--accent-dark);
+    margin-top: 4px;
+    line-height: 1.35;
+  }
+  .slide-knowledge-gap .q-grid.q-grid-readable {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 7px;
+    align-content: start;
+  }
+  .slide-knowledge-gap .q-grid.q-grid-readable .q-cell {
+    font-size: 12.5px;
+    padding: 9px 11px;
+    line-height: 1.35;
+    min-height: 0;
+  }
+
+  .slide-knowledge-gap-2 .body-knowledge-gap-2 {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-top: 4px;
+  }
+  .kg-page2-grid {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 0.95fr 1.05fr;
+    gap: 14px;
+  }
+  .kg-nonsense-card,
+  .kg-substantive-card {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 14px 16px;
+  }
+  .kg-nonsense-card .lbl,
+  .kg-substantive-card .lbl {
+    margin-bottom: 10px;
+    flex-shrink: 0;
+  }
+  .kg-nonsense-card .q-grid,
+  .kg-substantive-card .q-grid {
+    align-content: start;
+    grid-auto-rows: auto;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .kg-substantive-card .q-grid {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .kg-substantive-card .q-cell {
+    font-size: 12.5px;
+    padding: 9px 11px;
+    line-height: 1.35;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+  }
+  .kg-nonsense-card .q-grid {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .kg-nonsense-card .q-cell {
+    background: #f7f7f5;
+    border-color: #ececea;
+    font-size: 12.5px;
+    padding: 9px 11px;
+    line-height: 1.35;
+  }
+  .slide-knowledge-gap-2 .insight {
+    flex-shrink: 0;
+  }
+
+  .nonsense-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    align-content: start;
+  }
+  .nonsense-grid .q-cell {
+    background: #f7f7f5;
+    border-color: #ececea;
+    opacity: 0.92;
+  }
+
+  /* page — sentiment overview */
+  .slide-sentiment h1 { font-size: 38px; max-width: 900px; }
+  .slide-sentiment .body {
+    flex: 1;
+    min-height: 0;
+    padding-top: 14px;
+  }
+  .sentiment-layout {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .sentiment-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    flex-shrink: 0;
+  }
+  .sentiment-stat { padding: 14px 18px; }
+  .sentiment-stat .num { font-size: 32px; }
+  .sentiment-main {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 32px;
+    padding: 24px 28px;
+  }
+  .sentiment-visual {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    min-width: 0;
+  }
+  .sentiment-donut {
+    width: 168px;
+    height: 168px;
+    flex-shrink: 0;
+  }
+  .sentiment-legend {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+  }
+  .sentiment-legend-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    line-height: 1.3;
+  }
+  .sentiment-swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+  .sentiment-legend-label {
+    font-weight: 600;
+    color: var(--navy);
+    min-width: 62px;
+  }
+  .sentiment-legend-meta {
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .sentiment-copy {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    justify-content: center;
+    border-left: 1px solid var(--card-border);
+    padding-left: 32px;
+  }
+  .sentiment-copy p {
+    font-size: 14.5px;
+    line-height: 1.65;
+    color: #444;
+  }
+  .sentiment-copy p strong { color: #151515; font-weight: 700; }
+
   /* action */
   .action { border-radius: 12px; padding: 20px 22px; border: 1px solid var(--card-border); background: var(--card); }
   .action.top { background: var(--accent); border-color: var(--accent-border); }
@@ -998,6 +1580,7 @@
             <ul class="card-details">
               <li><strong>{{count_resolved}}</strong> volledig opgelost door AI</li>
               <li><strong>{{count_referred}}</strong> doorverwezen via e-mailadres ({{pct_referred}}%)</li>
+              {{referred_intent_li}}
               <li><strong>{{count_other_handling}}</strong> open of deels afgehandeld</li>
             </ul>
           </div>
@@ -1007,15 +1590,11 @@
           </div>
         </div>
       </div>
-      <div class="card card-split">
+      <div class="card card-split support-hours-card">
         <div class="lbl"><i data-lucide="clock" class="ic"></i> Bespaarde support uren</div>
         <div class="card-split-body">
           <div class="card-split-info">
-            <p class="card-lead">Geschatte tijd die support anders aan deze gesprekken zou besteden, omgerekend naar kosten.</p>
-            <ul class="card-details">
-              <li>Tarief: <strong>{{stats_support_hourly_rate}}</strong></li>
-              <li><strong>{{stats_support_calc_detail}}</strong></li>
-            </ul>
+            {{stats_support_explanation_html}}
           </div>
           <div class="card-split-result">
             <div class="num">{{stats_hours_saved}}</div>
@@ -1144,21 +1723,26 @@
   <h1>Waar en wanneer praten mensen?</h1>
   <div class="body" style="padding-top:8px">
     <div class="insight channels-timing-intro">{{channels_timing_intro}}</div>
-    <div style="display:flex;flex-direction:row;gap:18px;flex:1;min-height:0">
-      <div class="card" style="flex:1.1;min-width:0;padding:22px 26px;display:flex;flex-direction:column">
-        <div style="font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:16px">Gesprekken per kanaal</div>
-        <div style="display:flex;flex-direction:column;gap:14px;flex:1">
+    <div class="channels-timing-panels">
+      <div class="card channels-timing-panel">
+        <div class="channels-timing-panel-title">Gesprekken per kanaal</div>
+        <div class="channels-timing-panel-chart">
+          <div class="channel-breakdown-rows">
           {{channel_breakdown_rows}}
+          </div>
         </div>
+        {{channel_timing_channel_stats}}
       </div>
-      <div class="card" style="flex:1;min-width:0;padding:22px 26px;display:flex;flex-direction:column">
-        <div style="font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:12px">Gesprekken per uur van de dag (gem.)</div>
-        <svg viewBox="0 0 384 175" style="width:100%;flex:1" xmlns="http://www.w3.org/2000/svg">
-          {{chart_slide3_inner}}
-        </svg>
+      <div class="card channels-timing-panel">
+        <div class="channels-timing-panel-title">Gesprekken per uur van de dag (gem.)</div>
+        <div class="channels-timing-panel-chart">
+          <svg viewBox="0 0 384 280" preserveAspectRatio="xMidYMid meet" style="width:100%;flex:1;display:block" xmlns="http://www.w3.org/2000/svg">
+            {{chart_slide3_inner}}
+          </svg>
+        </div>
+        {{channel_timing_hourly_stats}}
       </div>
     </div>
-    {{channel_timing_stats}}
     <div class="insight" style="margin-top:12px">
       <strong>Key Insight</strong> · {{channels_timing_insight}}
     </div>
@@ -1204,7 +1788,7 @@
 
 {{office_hours_channel_slides}}
 
-<section class="slide">
+<section class="slide slide-sentiment">
   <div class="topbar">
     <div class="logo"><svg class="mom-logo" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 429.8 59.7">
   <defs>
@@ -1232,26 +1816,14 @@
     <div class="doc">{{event_name}} · Conversation Analysis</div>
   </div>
   <div class="eyebrow">Sentiment</div>
-  <h1>Hoe ontwikkelt de stemming<br>zich door een gesprek?</h1>
-  <div class="body" style="flex-direction:row;gap:22px;padding-top:14px">
-    <!-- chart -->
-    <div class="card" style="flex:1;min-width:0;padding:20px 24px;display:flex;flex-direction:column">
-      <div style="font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:8px">Gem. sentiment per bericht in het gesprek (bericht #1 → #10)</div>
-      <svg viewBox="0 0 700 210" preserveAspectRatio="xMidYMid meet" style="width:100%;flex:1" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="#E2F5C9" stop-opacity=".8"/>
-            <stop offset="100%" stop-color="#E2F5C9" stop-opacity="0"/>
-          </linearGradient>
-        </defs>
-        {{chart_slide4_inner}}
-      </svg>
-    </div>
+  <h1>{{sentiment_headline}}</h1>
+  <div class="body body-fill-grid">
+    {{sentiment_page_content}}
   </div>
   <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>{{page_num_sentiment}} / {{report_page_total}}</span></div>
 </section>
 
-<section class="slide">
+<section class="slide slide-knowledge-gap">
   <div class="topbar">
     <div class="logo"><svg class="mom-logo" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 429.8 59.7">
   <defs>
@@ -1278,22 +1850,39 @@
 </svg></div>
     <div class="doc">{{event_name}} · Conversation Analysis</div>
   </div>
-  <div class="eyebrow">Onbeantwoorde vragen</div>
-  <h1>Wat kon de agent niet beantwoorden? <span style="font-size:22px;font-weight:600;color:var(--muted)">(1/2)</span></h1>
-  <div class="insight" style="margin-bottom:14px">
-    <strong>Kansen voor verbetering voor de volgende Agent.</strong> · Vragen waar het antwoord ontbrak of onvolledig was — input voor kennisbank, FAQ en vervolgtraining.
+  <div class="eyebrow">Kennis verrijken</div>
+  <h1>Welke kennis kunnen we verrijken? <span style="font-size:22px;font-weight:600;color:var(--muted)">(1/2)</span></h1>
+  <div class="insight page-intro">
+    <strong>Onbeantwoorde vragen ontrafelen.</strong> · We scheiden niet-serieuze vragen (grapjes, off-topic) van echte kennislacunes — input voor FAQ, kennisbank en training.
   </div>
   <div class="body body-fill-grid">
-    <div style="flex-shrink:0">
-      <div class="card dark" style="display:inline-block;padding:16px 24px">
-        <div class="lbl"><i data-lucide="circle-help" class="ic"></i> Totaal onbeantwoord</div>
-        <div class="num" style="font-size:44px">{{pct_unanswered}}%</div>
-        <div class="sub">van de vragen onbeantwoord</div>
+    <div class="knowledge-gap-panel">
+      <div class="kg-compact-grid">
+        <div class="kg-compact-item">
+          <div class="lbl">Totaal onbeantwoord</div>
+          <div class="kg-num-compact">{{pct_unanswered}}%</div>
+          <div class="kg-sub-compact">{{total_unanswered_questions}} stuks</div>
+        </div>
+        <div class="kg-compact-item">
+          <div class="lbl">Niet-serieuze vragen</div>
+          <div class="kg-num-compact">{{pct_nonsense}}%</div>
+          <div class="kg-sub-compact">{{nonsense_count}} · onzin / off-topic</div>
+        </div>
+        <div class="kg-compact-item">
+          <div class="lbl">Echte kennislacunes</div>
+          <div class="kg-num-compact">{{pct_substantive_unanswered}}%</div>
+          <div class="kg-sub-compact">van onbeantwoord</div>
+        </div>
+        <div class="kg-compact-item">
+          <div class="lbl">Te verrijken</div>
+          <div class="kg-num-compact">{{substantive_count}}</div>
+          <div class="kg-sub-compact">{{pct_substantive_total}}% van alle vragen</div>
+        </div>
       </div>
     </div>
     <div class="card card-fill" style="flex:1;min-height:0">
-      <div class="lbl"><i data-lucide="clock" class="ic"></i> Recente onbeantwoorde vragen</div>
-      <div class="q-grid fill-page">
+      <div class="lbl"><i data-lucide="book-open" class="ic"></i> Kennislacunes — vragen om de kennisbank mee te verrijken</div>
+      <div class="q-grid q-grid-readable">
         {{unanswered_examples_page1}}
       </div>
     </div>
@@ -1301,7 +1890,7 @@
   <div class="footer"><span>{{event_name}} · Conversation Analysis {{date_range}} · Momants</span><span>{{page_num_unanswered_1}} / {{report_page_total}}</span></div>
 </section>
 
-<section class="slide">
+<section class="slide slide-knowledge-gap slide-knowledge-gap-2">
   <div class="topbar">
     <div class="logo"><svg class="mom-logo" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 429.8 59.7">
   <defs>
@@ -1328,16 +1917,22 @@
 </svg></div>
     <div class="doc">{{event_name}} · Conversation Analysis</div>
   </div>
-  <div class="eyebrow">Onbeantwoorde vragen</div>
-  <h1>Wat kon de agent niet beantwoorden? <span style="font-size:22px;font-weight:600;color:var(--muted)">(2/2)</span></h1>
-  <div class="insight" style="margin-bottom:14px">
-    <strong>Kansen voor verbetering voor de volgende Agent.</strong> · Vragen waar het antwoord ontbrak of onvolledig was — input voor kennisbank, FAQ en vervolgtraining.
+  <div class="eyebrow">Kennis verrijken</div>
+  <h1>Welke kennis kunnen we verrijken? <span style="font-size:22px;font-weight:600;color:var(--muted)">(2/2)</span></h1>
+  <div class="insight page-intro">
+    <strong>Filter op relevantie.</strong> · Niet-serieuze vragen tellen mee in het totaal, maar horen niet in de kennisbank — alleen echte lacunes hieronder.
   </div>
-  <div class="body body-with-insight">
-    <div class="fill">
-      <div class="card card-fill">
-        <div class="lbl"><i data-lucide="clock" class="ic"></i> Recente onbeantwoorde vragen (vervolg)</div>
-        <div class="q-grid fill-page">
+  <div class="body body-knowledge-gap-2">
+    <div class="kg-page2-grid">
+      <div class="card kg-nonsense-card">
+        <div class="lbl"><i data-lucide="message-circle-off" class="ic"></i> Niet-serieuze vragen (gefilterd)</div>
+        <div class="q-grid">
+          {{nonsense_examples}}
+        </div>
+      </div>
+      <div class="card kg-substantive-card">
+        <div class="lbl"><i data-lucide="book-open" class="ic"></i> Kennislacunes (vervolg)</div>
+        <div class="q-grid">
           {{unanswered_examples_page2}}
         </div>
       </div>
@@ -1376,8 +1971,8 @@
 </svg></div>
     <div class="doc">{{event_name}} · Conversation Analysis</div>
   </div>
-  <div class="eyebrow">Best practices</div>
-  <h1>Vragen waar de agent uitblinkt.</h1>
+  <div class="eyebrow">Veelgestelde vragen</div>
+  <h1>Meest gestelde vragen</h1>
   <div class="body body-with-insight">
     <div class="fill">
       <div class="q-grid clusters fill-page">

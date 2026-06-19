@@ -7,6 +7,7 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
+from app.utils.unanswered_report import translate_questions_to_dutch
 from app.utils.report_data import fetch_momants_report_stats
 from app.utils.report_format import format_date_range, format_dutch_int, format_eur, resolve_event_name
 from app.utils.report_html import (
@@ -43,6 +44,9 @@ class WeeklyReportService:
         findings = self.analysis.load_findings(agent_run.id)
         clusters = self.analysis.load_clusters(agent_run.id)
         cluster_pairs = [(c.representative_text, c.count) for c in clusters]
+        if cluster_pairs:
+            translated = translate_questions_to_dutch([text for text, _ in cluster_pairs])
+            cluster_pairs = [(translated[index], count) for index, (_, count) in enumerate(cluster_pairs)]
 
         breakdown = {"no_reply": 0, "weak_answer": 0, "not_answered": 0}
         for item in findings:

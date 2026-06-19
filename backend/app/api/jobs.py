@@ -6,6 +6,7 @@ from app.schemas.jobs import RunningJobRead, RunningJobsResponse
 from app.services.ingestion_service import IngestionService
 from app.services.insights_service import InsightsService
 from app.services.job_concurrency import concurrency_snapshot
+from app.services.referred_intent_service import ReferredIntentService
 from app.services.sentiment_service import SentimentService
 
 router = APIRouter()
@@ -69,6 +70,27 @@ def _sentiment_to_running(job) -> RunningJobRead:
     )
 
 
+def _intent_to_running(job) -> RunningJobRead:
+    return RunningJobRead(
+        job_type="intent",
+        id=job.id,
+        agent_id=job.agent_id,
+        status=job.status,
+        processed=job.processed,
+        limit=job.limit,
+        failed=job.failed,
+        messages_analyzed=job.messages_analyzed,
+        reanalyze=job.reanalyze,
+        phase=job.phase,
+        phase_detail=job.phase_detail,
+        phase_progress=job.phase_progress,
+        phase_total=job.phase_total,
+        error=job.error,
+        created_at=job.created_at,
+        completed_at=job.completed_at,
+    )
+
+
 @router.get("/running", response_model=RunningJobsResponse)
 def list_running_jobs(
     agent_id: str | None = Query(default=None),
@@ -78,10 +100,12 @@ def list_running_jobs(
     ingest_jobs = IngestionService(db).list_running_jobs(agent_id)
     sentiment_jobs = SentimentService(db).list_running_jobs(agent_id)
     insights_jobs = InsightsService(db).list_running_jobs(agent_id)
+    intent_jobs = ReferredIntentService(db).list_running_jobs(agent_id)
 
     combined: list[RunningJobRead] = [_ingest_to_running(job) for job in ingest_jobs]
     combined.extend(_sentiment_to_running(job) for job in sentiment_jobs)
     combined.extend(_insights_to_running(job) for job in insights_jobs)
+    combined.extend(_intent_to_running(job) for job in intent_jobs)
     combined.sort(key=lambda job: job.created_at, reverse=True)
 
     snapshot = concurrency_snapshot(db, agent_id)

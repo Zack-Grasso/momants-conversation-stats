@@ -57,13 +57,15 @@ def is_pipeline_busy(agent_id: str) -> bool:
     return True
 
 
-def _spawn_pipeline(command: str, agent_id: str, initiated_by: str | None) -> None:
+def _spawn_pipeline(command: str, agent_id: str, initiated_by: str | None, *, extra_args: list[str] | None = None) -> None:
     env = os.environ.copy()
     env["PRELOAD_MODELS"] = "true"
     env["APP_ROLE"] = "scheduler"
     cmd = [sys.executable, "-m", "app.pipeline", command, f"--agent-id={agent_id}"]
     if initiated_by:
         cmd.append(f"--initiated-by={initiated_by}")
+    if extra_args:
+        cmd.extend(extra_args)
     subprocess.Popen(cmd, env=env, cwd=str(_BACKEND_ROOT))
 
 
@@ -92,6 +94,31 @@ def launch_reanalyze(agent_id: str, initiated_by: str | None = None) -> Pipeline
     except Exception as exc:
         logger.exception("Failed to spawn reanalyze for agent %s", agent_id)
         raise RuntimeError(f"Failed to start reanalyze: {exc}") from exc
+
+    return PipelineLaunchResult(agent_id=agent_id, initiated_by=initiated_by)
+
+
+def launch_referred_intent(
+    agent_id: str,
+    initiated_by: str | None = None,
+    *,
+    reanalyze: bool = False,
+) -> PipelineLaunchResult:
+    db = SessionLocal()
+    try:
+        from app.services.job_concurrency import count_running_intent_jobs
+
+        if count_running_intent_jobs(db, agent_id) > 0:
+            raise PipelineBusyError(f"Referred intent labeling already running for agent {agent_id}")
+    finally:
+        db.close()
+
+    extra_args = ["--reanalyze"] if reanalyze else None
+    try:
+        _spawn_pipeline("referred-intent", agent_id, initiated_by, extra_args=extra_args)
+    except Exception as exc:
+        logger.exception("Failed to spawn referred intent labeling for agent %s", agent_id)
+        raise RuntimeError(f"Failed to start referred intent labeling: {exc}") from exc
 
     return PipelineLaunchResult(agent_id=agent_id, initiated_by=initiated_by)
 
