@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.config import get_settings
 from app.integrations.momants_client import get_momants_client
 from app.integrations.slack_client import post_weekly_unanswered_bundle
-from app.weekly.models import WeeklyAgentRun, WeeklyRun
+from app.weekly.models import WeeklyAgentRun, WeeklyQuestionCluster, WeeklyRun, WeeklyUnansweredFinding
 from app.weekly.services.analysis_service import WeeklyAnalysisService
 from app.weekly.services.ingest_service import WeeklyIngestService
 from app.weekly.services.report_service import WeeklyReportService
@@ -19,6 +19,27 @@ from app.weekly.services.storage import agent_pdf_path, bundle_zip_path, safe_ag
 from app.weekly.settings_store import set_weekly_run_state
 
 logger = logging.getLogger(__name__)
+
+AGENT_STATUS_SKIPPED = "skipped"
+
+
+def _clear_agent_outputs(agent_run: WeeklyAgentRun) -> None:
+    from sqlalchemy import delete
+
+    if agent_run.pdf_path:
+        pdf_path = Path(agent_run.pdf_path)
+        if pdf_path.is_file():
+            pdf_path.unlink()
+    agent_run.pdf_path = None
+    agent_run.counts_json = None
+    agent_run.value_stats_json = None
+
+
+def _clear_agent_analysis(db: Session, agent_run: WeeklyAgentRun) -> None:
+    from sqlalchemy import delete
+
+    db.execute(delete(WeeklyUnansweredFinding).where(WeeklyUnansweredFinding.agent_run_id == agent_run.id))
+    db.execute(delete(WeeklyQuestionCluster).where(WeeklyQuestionCluster.agent_run_id == agent_run.id))
 
 
 def _set_progress(**fields) -> None:
@@ -92,6 +113,20 @@ class WeeklyOrchestrator:
             _set_progress(current_step="ingest")
             self.ingest.ingest_agent_window(agent_run, since=weekly_run.since, until=weekly_run.until)
             conversations = self.ingest.load_conversations(agent_run.id)
+            if not conversations:
+                _clear_agent_analysis(self.db, agent_run)
+                _clear_agent_outputs(agent_run)
+                agent_run.status = AGENT_STATUS_SKIPPED
+                agent_run.error = None
+                agent_run.completed_at = datetime.now(timezone.utc)
+                self.db.commit()
+                logger.info(
+                    "Weekly report skipped for agent %s week %s (no conversations)",
+                    agent_id,
+                    weekly_run.week_id,
+                )
+                return agent_run
+
             _set_progress(current_step="analyze")
             counts = self.analysis.analyze(agent_run, conversations)
             self.report.persist_value_stats(agent_run)
@@ -130,6 +165,10 @@ class WeeklyOrchestrator:
             ).all()
         )
         if not agent_runs:
+            zip_path = bundle_zip_path(weekly_run.week_id)
+            if zip_path.is_file():
+                zip_path.unlink()
+            weekly_run.summary_json = json.dumps({"agent_count": 0, "counts": {"no_reply": 0, "weak_answer": 0, "not_answered": 0, "total": 0}})
             weekly_run.status = "complete"
             weekly_run.completed_at = datetime.now(timezone.utc)
             self.db.commit()
@@ -219,7 +258,7 @@ class WeeklyOrchestrator:
             agent_run = self.run_agent(weekly_run, scoped_agent_id, name)
             if agent_run.status == "complete":
                 completed += 1
-            else:
+            elif agent_run.status != AGENT_STATUS_SKIPPED:
                 failed += 1
             _set_progress(agents_complete=completed, agents_failed=failed)
         else:
@@ -235,7 +274,7 @@ class WeeklyOrchestrator:
                 agent_run = self.run_agent(weekly_run, agent_id, name)
                 if agent_run.status == "complete":
                     completed += 1
-                else:
+                elif agent_run.status != AGENT_STATUS_SKIPPED:
                     failed += 1
                 _set_progress(agents_complete=completed, agents_failed=failed)
 

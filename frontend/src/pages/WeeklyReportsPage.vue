@@ -265,7 +265,12 @@ onUnmounted(stopPolling);
           </tr>
         </thead>
         <tbody>
-          <tr v-for="agent in selectedRun.agents" :key="agent.agent_id">
+          <tr
+            v-for="agent in selectedRun.agents"
+            :key="agent.agent_id"
+            :class="{ skipped: agent.status === 'skipped' }"
+            :title="agent.status === 'skipped' ? 'Agent skipped due to no convs' : undefined"
+          >
             <td>{{ agent.agent_name || agent.agent_id.slice(0, 8) }}</td>
             <td class="top-q">{{ agent.top_questions[0]?.text || "—" }}</td>
             <td>{{ agent.counts.no_reply || 0 }}</td>
@@ -304,6 +309,8 @@ onUnmounted(stopPolling);
 .summary .primary { margin-left:auto; }
 .agent-table { width:100%; border-collapse:collapse; font-size:0.9rem; }
 .agent-table th, .agent-table td { text-align:left; padding:0.55rem 0.5rem; border-bottom:1px solid #e2e8f0; vertical-align:top; }
+.agent-table tr.skipped td { text-decoration:line-through; color:#94a3b8; }
+.agent-table tr.skipped .actions button { text-decoration:none; }
 .top-q { max-width:280px; font-style:italic; color:#475569; }
 .actions { white-space:nowrap; display:flex; gap:0.35rem; }
 .hint.ok { color:#15803d; }

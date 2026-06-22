@@ -239,7 +239,7 @@ def download_pdf(
             WeeklyAgentRun.agent_id == agent_id,
         )
     )
-    if agent_run is None or not agent_run.pdf_path:
+    if agent_run is None or agent_run.status == "skipped" or not agent_run.pdf_path:
         raise HTTPException(status_code=404, detail="PDF not found")
     path = Path(agent_run.pdf_path)
     if not path.is_file():
@@ -265,6 +265,8 @@ def preview_html(week_id: str, agent_id: str, db: Session = Depends(get_weekly_d
     )
     if agent_run is None:
         raise HTTPException(status_code=404, detail="Agent run not found")
+    if agent_run.status == "skipped":
+        raise HTTPException(status_code=404, detail="Agent skipped due to no conversations")
     html = WeeklyReportService(db).render_html(agent_run)
     return HTMLResponse(content=html)
 

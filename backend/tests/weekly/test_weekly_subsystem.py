@@ -157,6 +157,70 @@ def test_post_weekly_bundle_uploads(tmp_path):
     mock_notifier.upload_file.assert_called_once()
 
 
+def test_run_agent_skips_when_no_conversations(weekly_db, tmp_path, monkeypatch):
+    from app.weekly.services.orchestrator import WeeklyOrchestrator, AGENT_STATUS_SKIPPED
+
+    run = WeeklyRun(
+        week_id="2026-W25",
+        since=datetime.now(timezone.utc),
+        until=datetime.now(timezone.utc),
+        status="running",
+    )
+    weekly_db.add(run)
+    weekly_db.commit()
+
+    orchestrator = WeeklyOrchestrator(weekly_db)
+    orchestrator.ingest.ingest_agent_window = MagicMock(return_value=0)
+    orchestrator.ingest.load_conversations = MagicMock(return_value=[])
+    orchestrator.analysis.analyze = MagicMock()
+    orchestrator.report.render_pdf = MagicMock()
+
+    agent_run = orchestrator.run_agent(run, "agent-empty", "Empty Agent")
+    assert agent_run.status == AGENT_STATUS_SKIPPED
+    assert agent_run.pdf_path is None
+    orchestrator.analysis.analyze.assert_not_called()
+    orchestrator.report.render_pdf.assert_not_called()
+
+
+def test_finalize_run_removes_zip_when_no_complete_agents(weekly_db, tmp_path, monkeypatch):
+    from app.weekly.services.orchestrator import WeeklyOrchestrator
+
+    run = WeeklyRun(
+        week_id="2026-W25",
+        since=datetime.now(timezone.utc),
+        until=datetime.now(timezone.utc),
+        status="running",
+    )
+    weekly_db.add(run)
+    weekly_db.flush()
+    weekly_db.add(
+        WeeklyAgentRun(
+            weekly_run_id=run.id,
+            agent_id="agent-empty",
+            agent_name="Empty",
+            status="skipped",
+        )
+    )
+    weekly_db.commit()
+
+    zip_path = tmp_path / "2026-W25" / "bundle.zip"
+    zip_path.parent.mkdir(parents=True)
+    zip_path.write_bytes(b"old")
+
+    monkeypatch.setattr(
+        "app.weekly.services.orchestrator.bundle_zip_path",
+        lambda week_id: zip_path,
+    )
+    monkeypatch.setattr(
+        "app.weekly.services.orchestrator.post_weekly_unanswered_bundle",
+        MagicMock(),
+    )
+
+    result = WeeklyOrchestrator(weekly_db).finalize_run(run)
+    assert result is None
+    assert not zip_path.is_file()
+
+
 def test_run_all_scoped_to_single_agent(weekly_db, monkeypatch):
     from app.weekly.services.orchestrator import WeeklyOrchestrator
     from app.weekly.settings_store import WeeklyConfig
